@@ -1,0 +1,59 @@
+version: "3.7"
+
+services:
+  web-app:
+    image: ghcr.io/SEU_USUARIO_GITHUB/meu-projeto-places:latest
+    # Substitua a imagem acima pelo caminho do seu repositório do GitHub (usando GitHub Packages)
+    # ou construa localmente se estiver subindo o código direto na VPS.
+    # Exemplo caso for construir na própria VPS:
+    # build: .
+    
+    hostname: "{{.Service.Name}}.{{.Task.Slot}}"
+    
+    networks:
+      - seo-net-desenv
+
+    environment:
+      # URL de conexão com o MongoDB interno do Swarm
+      # Substitua "meu_projeto_places" pelo nome do seu banco de dados
+      - MONGODB_URI=mongodb://admin_jp:T00jcpaYc3FVJWgea1dX1Tu@mongo:27017/meu_projeto_places?authSource=admin
+      - PORT=3000
+      # Adicione aqui suas outras chaves como OPENAI_API_KEY e GOOGLE_MAPS_API_KEY
+      # - OPENAI_API_KEY=sk-...
+      # - GOOGLE_MAPS_API_KEY=AIza...
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == desenv-mcp-worker-002
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  # Serviço do Cloudflare Tunnel
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN} 
+      # O Token será colocado nas variáveis de ambiente (Env) do Portainer
+    networks:
+      - seo-net-desenv
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == desenv-mcp-worker-002
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+networks:
+  seo-net-desenv:
+    external: true
+    name: seo-net-desenv

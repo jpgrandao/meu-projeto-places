@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Places</title>
+    <!-- Fontes do Google -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <header class="app-header">
+        <div class="header-content">
+            <h1>Gerenciador de Places</h1>
+            <nav class="app-nav">
+                <button class="nav-tab active" data-target="placesSection">📍 Locais</button>
+                <button class="nav-tab" data-target="searchEngineSection">🚀 Motor de Busca</button>
+                <button class="nav-tab" data-target="activitiesSection">🏢 Atividades (Termos)</button>
+                <button class="nav-tab" data-target="citiesSection">🗺️ Cidades & Bairros</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="app-container">
+        <!-- SEÇÃO: LOCAIS (PLACES) -->
+        <section id="placesSection" class="tab-content active-content">
+            <div class="places-layout">
+                <aside class="filters-panel">
+                    <h2>Filtros Avançados</h2>
+                    <div class="filter-group">
+                        <label for="filterNome">Nome</label>
+                        <input type="text" id="filterNome" placeholder="Ex: Spazzio...">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterTipo">Tipo de Negócio</label>
+                        <select id="filterTipo">
+                            <option value="">Qualquer (Carregando...)</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterCidade">Cidade</label>
+                        <input type="text" id="filterCidade" placeholder="Ex: Biguaçu...">
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterBairro">Bairro</label>
+                        <input type="text" id="filterBairro" placeholder="Ex: Centro...">
+                    </div>
+                    <div class="filter-group">
+                        <label>Avaliação (Rating)</label>
+                        <div class="range-inputs">
+                            <input type="number" id="filterRatingMin" step="0.1" min="0" max="5" placeholder="Mín.">
+                            <input type="number" id="filterRatingMax" step="0.1" min="0" max="5" placeholder="Máx.">
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <label>Total de Avaliações</label>
+                        <div class="range-inputs">
+                            <input type="number" id="filterTotalMin" min="0" placeholder="Mín.">
+                            <input type="number" id="filterTotalMax" min="0" placeholder="Máx.">
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterStatus">Status</label>
+                        <select id="filterStatus">
+                            <option value="">Qualquer</option>
+                            <option value="OPERATIONAL">Operacional</option>
+                            <option value="CLOSED_TEMPORARILY">Fechado Temporariamente</option>
+                            <option value="CLOSED_PERMANENTLY">Fechado Permanentemente</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterLimit">Resultados por Página</label>
+                        <select id="filterLimit">
+                            <option value="10">10</option>
+                            <option value="50" selected>50</option>
+                            <option value="100">100</option>
+                            <option value="500">500</option>
+                        </select>
+                    </div>
+                    <div class="action-buttons">
+                        <button id="btnSearch" class="btn-primary">Buscar Locais</button>
+                        <button id="btnClear" class="btn-secondary">Limpar Busca</button>
+                    </div>
+                </aside>
+
+                <div class="results-container">
+                    <div id="placesGrid" class="places-grid">
+                        <!-- Os cards serão injetados aqui -->
+                    </div>
+                    
+                    <div class="pagination-controls">
+                        <button id="btnPrev" class="btn-page" disabled>Anterior</button>
+                        <span id="pageIndicator">Página 1</span>
+                        <button id="btnNext" class="btn-page" disabled>Próxima</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEÇÃO: MOTOR DE BUSCA -->
+        <section id="searchEngineSection" class="tab-content">
+            <div class="admin-panel engine-panel">
+                <div class="admin-header">
+                    <h2>Motor de Busca (Google Maps)</h2>
+                    <p class="section-desc">Selecione as Cidades e as Atividades (Termos) para iniciar a varredura.</p>
+                </div>
+                
+                <div class="engine-layout">
+                    <!-- Painel de Configuração -->
+                    <div class="engine-config-panel">
+                        <div class="config-section">
+                            <h3>1. Selecione a Atividade</h3>
+                            <select id="engineSelectActivity" class="engine-select">
+                                <option value="">Carregando atividades...</option>
+                            </select>
+                        </div>
+
+                        <div class="config-section">
+                            <h3>2. Selecione o Estado</h3>
+                            <select id="engineSelectState" class="engine-select">
+                                <option value="">Carregando estados...</option>
+                            </select>
+                        </div>
+
+                        <div class="config-section">
+                            <h3>3. Selecione a Cidade</h3>
+                            <select id="engineSelectCity" class="engine-select" disabled>
+                                <option value="">Selecione um estado primeiro</option>
+                            </select>
+                        </div>
+
+                        <div class="config-section">
+                            <h3>4. Selecione os Bairros</h3>
+                            <div class="checkbox-list-container" id="engineBairrosList" style="min-height: 150px; max-height: 200px;">
+                                <p style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">Selecione uma cidade para carregar os bairros...</p>
+                            </div>
+                        </div>
+
+                        <div class="config-section engine-actions">
+                            <button id="btnEngineStart" class="btn-primary" style="margin-top: 0; background: #10b981;">▶ Iniciar Varredura</button>
+                            <button id="btnEnginePause" class="btn-secondary" style="margin-top: 0;" disabled>⏸ Pausar</button>
+                            <button id="btnEngineStop" class="btn-secondary" style="margin-top: 0; color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" disabled>⏹ Parar</button>
+                        </div>
+                    </div>
+
+                    <!-- Console/Logs e Status -->
+                    <div class="engine-console-wrapper">
+                        <div class="engine-status-bar">
+                            <div class="status-item">Status: <span id="engineCurrentStatus" class="status-badge status-closed">Parado</span></div>
+                            <div class="status-item">Progresso: <span id="engineProgressText">0 / 0</span></div>
+                        </div>
+                        <div class="engine-progress-bar-container">
+                            <div id="engineProgressBar" class="engine-progress-bar"></div>
+                        </div>
+                        <div class="console-header">
+                            <span>Terminal de Logs</span>
+                            <button id="btnClearLogs" class="btn-icon" title="Limpar Logs">
+                                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M15 4V3H9v1H4v2h1v13c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V6h1V4h-5zm2 15H7V6h10v13z"/></svg>
+                            </button>
+                        </div>
+                        <div id="engineConsole" class="engine-console">
+                            <div class="log-entry log-system">Pronto para iniciar...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEÇÃO: ATIVIDADES (TERMOS) -->
+        <section id="activitiesSection" class="tab-content">
+            <div class="admin-panel">
+                <div class="admin-header">
+                    <h2>Gerenciador de Atividades (Termos de Busca)</h2>
+                    <p class="section-desc">Defina e ative os termos de negócio a serem buscados pelo sistema.</p>
+                </div>
+                
+                <div class="admin-body">
+                    <div class="form-container">
+                        <h3>Adicionar Novo Termo</h3>
+                        <form id="formActivity" class="admin-form">
+                            <div class="form-group">
+                                <label for="activityNome">Nome do Termo</label>
+                                <input type="text" id="activityNome" placeholder="Ex: Clínica Veterinária, Pizzaria" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="activityAtiva">Status</label>
+                                <select id="activityAtiva">
+                                    <option value="V" selected>Ativa</option>
+                                    <option value="F">Inativa</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn-primary">Salvar Termo</button>
+                        </form>
+                    </div>
+                    
+                    <div class="table-container">
+                        <div class="admin-filters-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                            <h3 style="margin: 0; border: none; padding: 0;">Termos Cadastrados</h3>
+                            <input type="text" id="filterActivityName" placeholder="Pesquisar termo..." class="admin-filter-input">
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>Termo</th>
+                                        <th>Status</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activitiesTableBody">
+                                    <!-- Linhas serão injetadas via Javascript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEÇÃO: CIDADES E BAIRROS -->
+        <section id="citiesSection" class="tab-content">
+            <div class="admin-panel">
+                <div class="admin-header">
+                    <h2>Gerenciador de Cidades & Bairros</h2>
+                    <p class="section-desc">Gerencie as cidades focos e cadastre/gere os bairros associados para as buscas.</p>
+                </div>
+                
+                <div class="admin-body">
+                    <div class="form-container">
+                        <h3>Adicionar Nova Cidade</h3>
+                        <form id="formCity" class="admin-form">
+                            <div class="form-group">
+                                <label for="cityMunicipio">Nome da Cidade (Município)</label>
+                                <input type="text" id="cityMunicipio" placeholder="Ex: Sinop" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="cityEstado">Estado (UF)</label>
+                                <input type="text" id="cityEstado" placeholder="Ex: MT" maxlength="2" style="text-transform: uppercase;" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="cityPopulacao">População</label>
+                                <input type="number" id="cityPopulacao" placeholder="Ex: 150000">
+                            </div>
+                            <button type="submit" class="btn-primary">Salvar Cidade</button>
+                        </form>
+                    </div>
+                    
+                    <div class="list-container">
+                        <div class="admin-filters-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                            <h3 style="margin: 0; border: none; padding: 0;">Cidades e Bairros Cadastrados</h3>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="text" id="filterCityName" placeholder="Pesquisar cidade..." class="admin-filter-input" style="width: 200px;">
+                                <select id="filterCityState" class="admin-filter-input" style="width: 150px;">
+                                    <option value="">Todos os Estados</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="citiesList" class="cities-accordion-list">
+                            <!-- Accordion de Cidades injetados via Javascript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal de Edição (Geral para CRUD) -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Editar Registro</h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Inputs dinâmicos de edição -->
+            </div>
+            <div class="modal-footer">
+                <button id="btnModalCancel" class="btn-secondary">Cancelar</button>
+                <button id="btnModalSave" class="btn-primary">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>
