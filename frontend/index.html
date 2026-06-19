@@ -21,7 +21,11 @@
                 <button class="nav-tab" data-target="searchEngineSection">🚀 Motor de Busca</button>
                 <button class="nav-tab" data-target="activitiesSection">🏢 Atividades (Termos)</button>
                 <button class="nav-tab" data-target="citiesSection">🗺️ Cidades & Bairros</button>
+                <button class="nav-tab hidden" id="usersTabBtn" data-target="usersSection">👥 Usuários</button>
             </nav>
+            <div class="header-actions">
+                <button id="btnLogout" class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: none;">🚪 Sair</button>
+            </div>
         </div>
     </header>
 
@@ -266,6 +270,58 @@
                 </div>
             </div>
         </section>
+
+        <!-- SEÇÃO: USUÁRIOS -->
+        <section id="usersSection" class="tab-content">
+            <div class="admin-panel">
+                <div class="admin-header">
+                    <h2>Gerenciador de Usuários</h2>
+                    <p class="section-desc">Cadastre novos usuários e defina quem pode gerenciar a plataforma.</p>
+                </div>
+                
+                <div class="admin-body">
+                    <div class="form-container">
+                        <h3>Cadastrar Novo Usuário</h3>
+                        <form id="formUser" class="admin-form">
+                            <div class="form-group">
+                                <label for="userEmail">E-mail</label>
+                                <input type="email" id="userEmail" placeholder="Ex: colaborador@empresa.com" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="userPassword">Senha</label>
+                                <input type="password" id="userPassword" placeholder="Defina uma senha" required>
+                            </div>
+                            <div class="form-group" style="flex-direction: row; align-items: center; gap: 10px;">
+                                <input type="checkbox" id="userCanCreateUsers" style="width: auto; margin: 0;">
+                                <label for="userCanCreateUsers" style="margin: 0; font-weight: normal; cursor: pointer;">Permitir que este usuário crie outros usuários (Administrador)</label>
+                            </div>
+                            <button type="submit" class="btn-primary">Salvar Usuário</button>
+                        </form>
+                    </div>
+                    
+                    <div class="table-container">
+                        <div class="admin-filters-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                            <h3 style="margin: 0; border: none; padding: 0;">Usuários Cadastrados</h3>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>E-mail</th>
+                                        <th>É Administrador?</th>
+                                        <th>Data de Cadastro</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTableBody">
+                                    <!-- Linhas serão injetadas via Javascript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </main>
 
     <!-- Modal de Edição (Geral para CRUD) -->
@@ -282,6 +338,26 @@
                 <button id="btnModalCancel" class="btn-secondary">Cancelar</button>
                 <button id="btnModalSave" class="btn-primary">Salvar Alterações</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Tela de Login Overlay -->
+    <div id="loginOverlay" class="login-overlay hidden">
+        <div class="login-card">
+            <h2>Bem-vindo de volta!</h2>
+            <p>Faça login para acessar o painel.</p>
+            <form id="formLogin" class="login-form">
+                <div class="form-group">
+                    <label for="loginEmail">E-mail</label>
+                    <input type="email" id="loginEmail" placeholder="joao@seocompany.com.br" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Senha</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" required>
+                </div>
+                <div id="loginError" class="login-error hidden">Credenciais inválidas.</div>
+                <button type="submit" class="btn-primary login-btn">Entrar</button>
+            </form>
         </div>
     </div>
 

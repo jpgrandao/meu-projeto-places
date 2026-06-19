@@ -211,6 +211,8 @@ tabs.forEach(tab => {
             loadPlaces(true);
         } else if (targetId === 'searchEngineSection') {
             loadEngineConfigData();
+        } else if (targetId === 'usersSection') {
+            loadUsersAdmin();
         }
     });
 });
@@ -1166,8 +1168,181 @@ window.api.onEngineFinished((data) => {
 
 // --- INICIALIZAÇÃO DA APLICAÇÃO ---
 async function init() {
-    await reloadActivitiesFilter();
-    await loadPlaces(true);
+    const overlay = document.getElementById('loginOverlay');
+    const btnLogout = document.getElementById('btnLogout');
+    const usersTabBtn = document.getElementById('usersTabBtn');
+    
+    // Tenta validar a sessão
+    try {
+        const user = await window.api.checkSession();
+        // Sessão válida
+        overlay.classList.add('hidden');
+        btnLogout.style.display = 'block';
+        
+        // Se for admin, exibe a aba de usuários
+        if (user.can_create_users) {
+            usersTabBtn.classList.remove('hidden');
+        }
+        
+        await reloadActivitiesFilter();
+        await loadPlaces(true);
+    } catch (error) {
+        // Sessão inválida ou não logado
+        overlay.classList.remove('hidden');
+    }
+}
+
+// --- AUTENTICAÇÃO E LOGIN ---
+const formLogin = document.getElementById('formLogin');
+const loginError = document.getElementById('loginError');
+
+if (formLogin) {
+    formLogin.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+        const btn = formLogin.querySelector('button');
+        
+        if (!email || !password) return;
+        
+        btn.disabled = true;
+        btn.textContent = 'Entrando...';
+        loginError.classList.add('hidden');
+        
+        try {
+            const res = await window.api.login(email, password);
+            if (res.token) {
+                localStorage.setItem('token', res.token);
+                localStorage.setItem('user', JSON.stringify(res.user));
+                window.location.reload(); // Recarrega para inicializar a aplicação logada
+            } else {
+                throw new Error(res.error || 'Falha no login');
+            }
+        } catch (error) {
+            loginError.textContent = error.message || 'E-mail ou senha inválidos.';
+            loginError.classList.remove('hidden');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Entrar';
+        }
+    });
+}
+
+const btnLogout = document.getElementById('btnLogout');
+if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.reload();
+    });
+}
+
+// --- CRUD: USUÁRIOS ---
+const formUser = document.getElementById('formUser');
+if (formUser) {
+    formUser.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const emailInput = document.getElementById('userEmail');
+        const passwordInput = document.getElementById('userPassword');
+        const canCreateInput = document.getElementById('userCanCreateUsers');
+        
+        const email = emailInput.value.trim();
+        const password = passwordInput.value.trim();
+        const can_create_users = canCreateInput.checked;
+        
+        if (!email || !password) return;
+        
+        const btn = formUser.querySelector('button');
+        btn.disabled = true;
+        btn.textContent = 'Salvando...';
+        
+        try {
+            const res = await window.api.createUser({ email, password, can_create_users });
+            if (res.success) {
+                emailInput.value = '';
+                passwordInput.value = '';
+                canCreateInput.checked = false;
+                await loadUsersAdmin();
+            } else {
+                alert('Erro ao criar usuário: ' + (res.error || 'Erro desconhecido.'));
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao cadastrar usuário. Verifique se o e-mail já existe.');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Salvar Usuário';
+        }
+    });
+}
+
+async function loadUsersAdmin() {
+    const tableBody = document.getElementById('usersTableBody');
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 1.5rem;">Carregando usuários...</td></tr>';
+    
+    try {
+        const res = await window.api.getUsers();
+        const users = res.data || [];
+        tableBody.innerHTML = '';
+        
+        if (users.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 1.5rem;">Nenhum usuário encontrado.</td></tr>';
+            return;
+        }
+        
+        users.forEach(user => {
+            const date = new Date(user.created_at).toLocaleDateString('pt-BR');
+            const roleBadge = user.can_create_users ? 
+                '<span class="badge badge-active">Sim</span>' : 
+                '<span class="badge badge-inactive">Não</span>';
+            
+            // Não permite deletar a si mesmo (proteção básica front-end)
+            const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+            const isSelf = currentUser.email === user.email;
+            
+            const btnDelete = isSelf ? 
+                '<span style="font-size: 0.8rem; color: var(--text-secondary);">Você</span>' :
+                `<button class="btn-icon btn-icon-delete btn-delete-user" data-id="${user._id}" data-email="${user.email}" title="Excluir Usuário">
+                    <svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>
+                 </button>`;
+            
+            const row = `
+                <tr>
+                    <td><strong>${user.email}</strong></td>
+                    <td>${roleBadge}</td>
+                    <td>${date}</td>
+                    <td>${btnDelete}</td>
+                </tr>
+            `;
+            tableBody.insertAdjacentHTML('beforeend', row);
+        });
+        
+        // Listeners das ações
+        document.querySelectorAll('.btn-delete-user').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-id');
+                const email = btn.getAttribute('data-email');
+                if (confirm(`Deseja realmente excluir o usuário "${email}"?`)) {
+                    try {
+                        const res = await window.api.deleteUser(id);
+                        if (res.success || res.message === 'Usuário deletado') {
+                            await loadUsersAdmin();
+                        } else {
+                            alert('Erro ao excluir: ' + (res.error || 'Desconhecido'));
+                        }
+                    } catch (e) {
+                        alert('Erro ao excluir usuário.');
+                    }
+                }
+            });
+        });
+        
+    } catch (err) {
+        console.error(err);
+        tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: red;">Erro ao obter lista de usuários.</td></tr>';
+    }
 }
 
 // Ligar eventos de filtro das abas administrativas
