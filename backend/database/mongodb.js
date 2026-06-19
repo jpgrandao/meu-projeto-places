@@ -369,6 +369,7 @@ async function initSuperUser() {
             console.log('Nenhum usuário encontrado. Criando superusuário...');
             const hashedPassword = await bcrypt.hash('KJP.diga7314', 10);
             await collection.insertOne({
+                name: 'Administrador (Master)',
                 email: 'joao@seocompany.com.br',
                 password: hashedPassword,
                 can_create_users: true,
@@ -378,6 +379,30 @@ async function initSuperUser() {
         }
     } catch (error) {
         console.error('Erro ao inicializar superusuário:', error);
+    }
+}
+
+async function getUserById(id) {
+    try {
+        const database = await getDb();
+        return await database.collection('users').findOne({ _id: new ObjectId(id) });
+    } catch (error) {
+        console.error('Erro ao buscar usuário por ID:', error);
+        return null;
+    }
+}
+
+async function updateUserById(id, updates) {
+    try {
+        const database = await getDb();
+        await database.collection('users').updateOne(
+            { _id: new ObjectId(id) },
+            { $set: updates }
+        );
+        return true;
+    } catch (error) {
+        console.error('Erro ao atualizar usuário:', error);
+        return false;
     }
 }
 
@@ -415,7 +440,7 @@ async function getUsers() {
     }
 }
 
-async function createUser(email, password, can_create_users) {
+async function createUser(name, email, password, can_create_users) {
     try {
         const database = await getDb();
         const collection = database.collection('users');
@@ -427,6 +452,7 @@ async function createUser(email, password, can_create_users) {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const result = await collection.insertOne({
+            name: name || 'Usuário',
             email,
             password: hashedPassword,
             can_create_users: !!can_create_users,
@@ -473,8 +499,9 @@ module.exports = {
     savePlaceDirectly,
     initSuperUser,
     getUserByEmail,
-    getUserById,
     getUsers,
     createUser,
-    deleteUser
+    deleteUser,
+    getUserById,
+    updateUserById
 };

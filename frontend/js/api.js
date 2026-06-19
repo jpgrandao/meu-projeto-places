@@ -54,8 +54,10 @@ window.api = {
         if (!res.ok) throw new Error('Não autenticado');
         return res.json();
     },
+    updateProfile: (data) => window.api._put('/api/auth/profile', data),
     getUsers: () => window.api._get('/api/users'),
     createUser: (user) => window.api._post('/api/users', user),
+    updateUser: (id, user) => window.api._put(`/api/users/${id}`, user),
     deleteUser: (id) => window.api._delete(`/api/users/${id}`),
 
     // --- Places ---

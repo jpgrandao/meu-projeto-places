@@ -9,9 +9,8 @@ const { verifyToken, JWT_SECRET } = require('../middleware/authMiddleware');
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-
         if (!email || !password) {
-            return res.status(400).json({ error: 'Email e senha são obrigatórios.' });
+            return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
         }
 
         const user = await getUserByEmail(email);
@@ -28,6 +27,7 @@ router.post('/login', async (req, res) => {
         const payload = {
             id: user._id,
             email: user.email,
+            name: user.name || 'Usuário',
             can_create_users: user.can_create_users
         };
 
@@ -38,26 +38,73 @@ router.post('/login', async (req, res) => {
             success: true,
             token,
             user: {
+                id: user._id,
                 email: user.email,
+                name: user.name || 'Usuário',
                 can_create_users: user.can_create_users
             }
         });
     } catch (error) {
-        console.error('Erro no login:', error);
-        res.status(500).json({ error: 'Erro interno no servidor.' });
+        res.status(500).json({ error: 'Erro no login.' });
     }
 });
 
 // Checar sessão
-router.get('/me', verifyToken, (req, res) => {
-    // Se o middleware passou, o token é válido e req.user existe
-    res.json({
-        success: true,
-        user: {
-            email: req.user.email,
-            can_create_users: req.user.can_create_users
+router.get('/me', verifyToken, async (req, res) => {
+    try {
+        // Buscar o usuário atualizado no banco
+        const { getUserById } = require('../database/mongodb');
+        const user = await getUserById(req.user.id);
+        
+        if (!user) {
+            return res.status(401).json({ error: 'Usuário não encontrado.' });
         }
-    });
+
+        res.json({
+            success: true,
+            user: {
+                id: user._id,
+                email: user.email,
+                name: user.name || 'Usuário',
+                can_create_users: user.can_create_users
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Erro ao verificar sessão.' });
+    }
+});
+
+// Atualizar perfil
+router.put('/profile', verifyToken, async (req, res) => {
+    try {
+        const { name, currentPassword, newPassword } = req.body;
+        const { getUserById, updateUserById } = require('../database/mongodb');
+        
+        const user = await getUserById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ error: 'Usuário não encontrado.' });
+        }
+
+        const updates = {};
+        if (name) updates.name = name;
+
+        if (currentPassword && newPassword) {
+            const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+            if (!isValidPassword) {
+                return res.status(400).json({ error: 'Senha atual incorreta.' });
+            }
+            updates.password = await bcrypt.hash(newPassword, 10);
+        }
+
+        const success = await updateUserById(req.user.id, updates);
+        if (success) {
+            res.json({ success: true, message: 'Perfil atualizado com sucesso.' });
+        } else {
+            res.status(500).json({ error: 'Erro ao atualizar perfil.' });
+        }
+    } catch (error) {
+        res.status(500).json({ error: 'Erro interno ao atualizar perfil.' });
+    }
 });
 
 // Forçar inicialização (caso de emergência)

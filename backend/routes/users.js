@@ -21,13 +21,13 @@ router.get('/', async (req, res) => {
 // Criar novo usuário
 router.post('/', async (req, res) => {
     try {
-        const { email, password, can_create_users } = req.body;
+        const { name, email, password, can_create_users } = req.body;
         
         if (!email || !password) {
             return res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
         }
 
-        const result = await createUser(email, password, can_create_users);
+        const result = await createUser(name, email, password, can_create_users);
         if (!result.success) {
             return res.status(400).json({ error: result.error });
         }
@@ -36,6 +36,35 @@ router.post('/', async (req, res) => {
     } catch (error) {
         console.error('Erro ao criar usuário:', error);
         res.status(500).json({ error: 'Erro interno ao criar usuário' });
+    }
+});
+
+// Editar usuário (Master)
+router.put('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, email, password, can_create_users } = req.body;
+        const { updateUserById } = require('../database/mongodb');
+        const bcrypt = require('bcryptjs');
+
+        const updates = {};
+        if (name !== undefined) updates.name = name;
+        if (email !== undefined) updates.email = email;
+        if (can_create_users !== undefined) updates.can_create_users = !!can_create_users;
+        
+        if (password && password.trim() !== '') {
+            updates.password = await bcrypt.hash(password, 10);
+        }
+
+        const success = await updateUserById(id, updates);
+        if (success) {
+            res.json({ success: true, message: 'Usuário atualizado com sucesso' });
+        } else {
+            res.status(500).json({ error: 'Erro ao atualizar usuário' });
+        }
+    } catch (error) {
+        console.error('Erro ao editar usuário:', error);
+        res.status(500).json({ error: 'Erro interno ao editar usuário' });
     }
 });
 

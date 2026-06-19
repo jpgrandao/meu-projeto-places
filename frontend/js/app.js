@@ -1174,14 +1174,31 @@ async function init() {
     
     // Tenta validar a sessão
     try {
-        const user = await window.api.checkSession();
+        const res = await window.api.checkSession();
+        const user = res.user;
         // Sessão válida
         overlay.classList.add('hidden');
-        btnLogout.style.display = 'block';
         
-        // Se for admin, exibe a aba de usuários
+        // Atualizar menu de usuário
+        const btnUserMenu = document.getElementById('btnUserMenu');
+        const headerUserName = document.getElementById('headerUserName');
+        const dropdownUserName = document.getElementById('dropdownUserName');
+        const dropdownUserEmail = document.getElementById('dropdownUserEmail');
+        
+        if (btnUserMenu) {
+            btnUserMenu.style.display = 'flex';
+            headerUserName.textContent = (user.name || user.email).charAt(0).toUpperCase();
+            dropdownUserName.textContent = user.name || 'Usuário';
+            dropdownUserEmail.textContent = user.email;
+        }
+        
+        // Se for admin, exibe a aba de usuários e as opções no dropdown
         if (user.can_create_users) {
-            usersTabBtn.classList.remove('hidden');
+            if (usersTabBtn) usersTabBtn.classList.remove('hidden');
+            const liNewUser = document.getElementById('liNewUser');
+            const liAllUsers = document.getElementById('liAllUsers');
+            if (liNewUser) liNewUser.classList.remove('hidden');
+            if (liAllUsers) liAllUsers.classList.remove('hidden');
         }
         
         await reloadActivitiesFilter();
@@ -1237,15 +1254,153 @@ if (btnLogout) {
     });
 }
 
+// --- MENU DO USUÁRIO E DROPDOWN ---
+const btnUserMenu = document.getElementById('btnUserMenu');
+const userDropdown = document.getElementById('userDropdown');
+
+if (btnUserMenu && userDropdown) {
+    btnUserMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        userDropdown.classList.toggle('hidden');
+    });
+
+    // Fechar ao clicar fora
+    document.addEventListener('click', (e) => {
+        if (!userDropdown.contains(e.target) && !btnUserMenu.contains(e.target)) {
+            userDropdown.classList.add('hidden');
+        }
+    });
+}
+
+// --- MODAL DE PERFIL ---
+const profileModal = document.getElementById('profileModal');
+const btnProfile = document.getElementById('btnProfile');
+const closeProfileModal = document.getElementById('closeProfileModal');
+const btnProfileCancel = document.getElementById('btnProfileCancel');
+const formProfile = document.getElementById('formProfile');
+const profileError = document.getElementById('profileError');
+const profileSuccess = document.getElementById('profileSuccess');
+
+function hideProfileModal() {
+    profileModal.classList.remove('show');
+    setTimeout(() => { profileModal.style.display = 'none'; }, 300);
+}
+
+if (btnProfile && profileModal) {
+    btnProfile.addEventListener('click', () => {
+        userDropdown.classList.add('hidden');
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        document.getElementById('profileName').value = currentUser.name || '';
+        document.getElementById('profileCurrentPassword').value = '';
+        document.getElementById('profileNewPassword').value = '';
+        document.getElementById('profileConfirmPassword').value = '';
+        profileError.classList.add('hidden');
+        profileSuccess.style.display = 'none';
+        
+        profileModal.style.display = 'flex';
+        setTimeout(() => { profileModal.classList.add('show'); }, 10);
+    });
+    
+    closeProfileModal.addEventListener('click', hideProfileModal);
+    btnProfileCancel.addEventListener('click', hideProfileModal);
+    
+    document.getElementById('btnProfileSave').addEventListener('click', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('profileName').value.trim();
+        const currentPassword = document.getElementById('profileCurrentPassword').value.trim();
+        const newPassword = document.getElementById('profileNewPassword').value.trim();
+        const confirmPassword = document.getElementById('profileConfirmPassword').value.trim();
+        
+        profileError.classList.add('hidden');
+        profileSuccess.style.display = 'none';
+        
+        if (newPassword || confirmPassword) {
+            if (!currentPassword) {
+                profileError.textContent = 'A senha atual é obrigatória para definir uma nova senha.';
+                profileError.classList.remove('hidden');
+                return;
+            }
+            if (newPassword !== confirmPassword) {
+                profileError.textContent = 'A nova senha e a confirmação não conferem.';
+                profileError.classList.remove('hidden');
+                return;
+            }
+        }
+        
+        try {
+            const data = { name, currentPassword, newPassword };
+            const res = await window.api.updateProfile(data);
+            if (res.success) {
+                profileSuccess.style.display = 'block';
+                // Atualizar o name no localStorage e na UI
+                const user = JSON.parse(localStorage.getItem('user') || '{}');
+                user.name = name;
+                localStorage.setItem('user', JSON.stringify(user));
+                document.getElementById('headerUserName').textContent = (name || user.email).charAt(0).toUpperCase();
+                document.getElementById('dropdownUserName').textContent = name || 'Usuário';
+                setTimeout(() => { hideProfileModal(); }, 1500);
+            } else {
+                profileError.textContent = res.error || 'Erro ao atualizar perfil.';
+                profileError.classList.remove('hidden');
+            }
+        } catch (error) {
+            profileError.textContent = error.message || 'Erro interno ao atualizar perfil.';
+            profileError.classList.remove('hidden');
+        }
+    });
+}
+
+// --- MODAL SOBRE ---
+const aboutModal = document.getElementById('aboutModal');
+const btnAbout = document.getElementById('btnAbout');
+const closeAboutModal = document.getElementById('closeAboutModal');
+
+function hideAboutModal() {
+    aboutModal.classList.remove('show');
+    setTimeout(() => { aboutModal.style.display = 'none'; }, 300);
+}
+
+if (btnAbout && aboutModal) {
+    btnAbout.addEventListener('click', () => {
+        userDropdown.classList.add('hidden');
+        aboutModal.style.display = 'flex';
+        setTimeout(() => { aboutModal.classList.add('show'); }, 10);
+    });
+    closeAboutModal.addEventListener('click', hideAboutModal);
+}
+
+// --- DROPDOWN LINKS ADMIN ---
+const btnDropdownNewUser = document.getElementById('btnDropdownNewUser');
+if (btnDropdownNewUser) {
+    btnDropdownNewUser.addEventListener('click', () => {
+        userDropdown.classList.add('hidden');
+        const usersTabBtn = document.getElementById('usersTabBtn');
+        if (usersTabBtn) usersTabBtn.click();
+        document.getElementById('userEmail').focus();
+    });
+}
+
+const btnDropdownAllUsers = document.getElementById('btnDropdownAllUsers');
+if (btnDropdownAllUsers) {
+    btnDropdownAllUsers.addEventListener('click', () => {
+        userDropdown.classList.add('hidden');
+        const usersTabBtn = document.getElementById('usersTabBtn');
+        if (usersTabBtn) usersTabBtn.click();
+        document.querySelector('.admin-table').scrollIntoView({ behavior: 'smooth' });
+    });
+}
+
 // --- CRUD: USUÁRIOS ---
 const formUser = document.getElementById('formUser');
 if (formUser) {
     formUser.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const nameInput = document.getElementById('userName');
         const emailInput = document.getElementById('userEmail');
         const passwordInput = document.getElementById('userPassword');
         const canCreateInput = document.getElementById('userCanCreateUsers');
         
+        const name = nameInput ? nameInput.value.trim() : '';
         const email = emailInput.value.trim();
         const password = passwordInput.value.trim();
         const can_create_users = canCreateInput.checked;
@@ -1257,7 +1412,7 @@ if (formUser) {
         btn.textContent = 'Salvando...';
         
         try {
-            const res = await window.api.createUser({ email, password, can_create_users });
+            const res = await window.api.createUser({ name, email, password, can_create_users });
             if (res.success) {
                 emailInput.value = '';
                 passwordInput.value = '';
@@ -1288,7 +1443,7 @@ async function loadUsersAdmin() {
         tableBody.innerHTML = '';
         
         if (users.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 1.5rem;">Nenhum usuário encontrado.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 1.5rem;">Nenhum usuário encontrado.</td></tr>';
             return;
         }
         
@@ -1302,6 +1457,10 @@ async function loadUsersAdmin() {
             const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
             const isSelf = currentUser.email === user.email;
             
+            const btnEdit = `<button class="btn-icon btn-icon-edit btn-edit-user" data-id="${user._id}" data-name="${user.name||''}" data-email="${user.email}" data-admin="${user.can_create_users}" title="Editar Usuário">
+                                <svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                             </button>`;
+
             const btnDelete = isSelf ? 
                 '<span style="font-size: 0.8rem; color: var(--text-secondary);">Você</span>' :
                 `<button class="btn-icon btn-icon-delete btn-delete-user" data-id="${user._id}" data-email="${user.email}" title="Excluir Usuário">
@@ -1310,10 +1469,11 @@ async function loadUsersAdmin() {
             
             const row = `
                 <tr>
-                    <td><strong>${user.email}</strong></td>
+                    <td><strong>${user.name || 'Usuário'}</strong></td>
+                    <td>${user.email}</td>
                     <td>${roleBadge}</td>
                     <td>${date}</td>
-                    <td>${btnDelete}</td>
+                    <td>${btnEdit} ${btnDelete}</td>
                 </tr>
             `;
             tableBody.insertAdjacentHTML('beforeend', row);
@@ -1339,10 +1499,93 @@ async function loadUsersAdmin() {
             });
         });
         
+        document.querySelectorAll('.btn-edit-user').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-id');
+                const name = btn.getAttribute('data-name');
+                const email = btn.getAttribute('data-email');
+                const isAdmin = btn.getAttribute('data-admin') === 'true';
+                
+                openUserEditModal(id, name, email, isAdmin);
+            });
+        });
+        
     } catch (err) {
         console.error(err);
-        tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: red;">Erro ao obter lista de usuários.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Erro ao obter lista de usuários.</td></tr>';
     }
+}
+
+function openUserEditModal(id, currentName, currentEmail, currentAdmin) {
+    const modalTitle = document.getElementById('modalTitle');
+    const modalBody = document.getElementById('modalBody');
+    const btnSave = document.getElementById('btnModalSave');
+    
+    modalTitle.textContent = 'Editar Usuário';
+    
+    const bodyHtml = `
+        <div class="form-group">
+            <label>Nome</label>
+            <input type="text" id="editUserName" value="${currentName || ''}" placeholder="Nome do usuário">
+        </div>
+        <div class="form-group">
+            <label>E-mail</label>
+            <input type="email" id="editUserEmail" value="${currentEmail}" placeholder="Ex: colaborador@empresa.com">
+        </div>
+        <div class="form-group">
+            <label>Nova Senha (Deixe em branco para não alterar)</label>
+            <input type="password" id="editUserPassword" placeholder="••••••••">
+        </div>
+        <div class="form-group" style="flex-direction: row; align-items: center; gap: 10px;">
+            <input type="checkbox" id="editUserAdmin" style="width: auto; margin: 0;" ${currentAdmin ? 'checked' : ''}>
+            <label for="editUserAdmin" style="margin: 0; font-weight: normal; cursor: pointer;">Administrador</label>
+        </div>
+        <div id="editUserError" class="login-error hidden" style="margin-top:1rem;"></div>
+    `;
+    modalBody.innerHTML = bodyHtml;
+    
+    // Mostra o modal reutilizando a lógica existente
+    const modal = document.getElementById('editModal');
+    modal.style.display = 'flex';
+    setTimeout(() => { modal.classList.add('show'); }, 10);
+    
+    // Define a ação de salvar (removendo event listeners anteriores usando clone)
+    const newBtnSave = btnSave.cloneNode(true);
+    btnSave.parentNode.replaceChild(newBtnSave, btnSave);
+    
+    newBtnSave.addEventListener('click', async () => {
+        const name = document.getElementById('editUserName').value.trim();
+        const email = document.getElementById('editUserEmail').value.trim();
+        const password = document.getElementById('editUserPassword').value.trim();
+        const isAdmin = document.getElementById('editUserAdmin').checked;
+        const errDiv = document.getElementById('editUserError');
+        
+        errDiv.classList.add('hidden');
+        newBtnSave.disabled = true;
+        newBtnSave.textContent = 'Salvando...';
+        
+        try {
+            const data = { name, email, can_create_users: isAdmin };
+            if (password) data.password = password;
+            
+            const res = await window.api.updateUser(id, data);
+            if (res.success) {
+                // Fecha modal
+                modal.classList.remove('show');
+                setTimeout(() => { modal.style.display = 'none'; }, 300);
+                await loadUsersAdmin();
+            } else {
+                errDiv.textContent = res.error || 'Erro ao editar usuário.';
+                errDiv.classList.remove('hidden');
+            }
+        } catch (error) {
+            errDiv.textContent = 'Erro interno ao editar usuário.';
+            errDiv.classList.remove('hidden');
+        } finally {
+            newBtnSave.disabled = false;
+            newBtnSave.textContent = 'Salvar Alterações';
+        }
+    });
 }
 
 // Ligar eventos de filtro das abas administrativas
