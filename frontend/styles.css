@@ -22,6 +22,10 @@ body {
     min-height: 100vh;
 }
 
+.hidden {
+    display: none !important;
+}
+
 .app-header {
     background: var(--card-bg);
     padding: 1rem 2rem;

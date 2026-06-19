@@ -1,5 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const { verifyToken } = require('../middleware/authMiddleware');
+
+// Middleware para proteger todas as rotas de api.js
+router.use(verifyToken);
 const { 
     getPlaces, 
     getActivities, 
