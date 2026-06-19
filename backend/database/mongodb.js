@@ -1,8 +1,9 @@
 const { MongoClient, ObjectId } = require('mongodb');
 const path = require('path');
+const bcrypt = require('bcryptjs');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const uri = process.env.MONGO_URI;
+const uri = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://mongo:27017/seo_places';
 const client = new MongoClient(uri);
 
 let connectedClient = null;
@@ -358,6 +359,100 @@ async function savePlaceDirectly(placeDoc) {
     }
 }
 
+async function initSuperUser() {
+    try {
+        const database = await getDb();
+        const collection = database.collection('users');
+        
+        const count = await collection.countDocuments();
+        if (count === 0) {
+            console.log('Nenhum usuário encontrado. Criando superusuário...');
+            const hashedPassword = await bcrypt.hash('KJP.diga7314', 10);
+            await collection.insertOne({
+                email: 'joao@seocompany.com.br',
+                password: hashedPassword,
+                can_create_users: true,
+                created_at: new Date()
+            });
+            console.log('Superusuário joao@seocompany.com.br criado com sucesso.');
+        }
+    } catch (error) {
+        console.error('Erro ao inicializar superusuário:', error);
+    }
+}
+
+async function getUserByEmail(email) {
+    try {
+        const database = await getDb();
+        const collection = database.collection('users');
+        return await collection.findOne({ email });
+    } catch (error) {
+        console.error('Erro ao buscar usuário por email:', error);
+        return null;
+    }
+}
+
+async function getUserById(id) {
+    try {
+        const database = await getDb();
+        const collection = database.collection('users');
+        return await collection.findOne({ _id: new ObjectId(id) });
+    } catch (error) {
+        console.error('Erro ao buscar usuário por ID:', error);
+        return null;
+    }
+}
+
+async function getUsers() {
+    try {
+        const database = await getDb();
+        const collection = database.collection('users');
+        const users = await collection.find({}, { projection: { password: 0 } }).sort({ created_at: -1 }).toArray();
+        return users;
+    } catch (error) {
+        console.error('Erro ao buscar lista de usuários:', error);
+        return [];
+    }
+}
+
+async function createUser(email, password, can_create_users) {
+    try {
+        const database = await getDb();
+        const collection = database.collection('users');
+        
+        const existing = await collection.findOne({ email });
+        if (existing) {
+            return { success: false, error: 'Email já está em uso' };
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const result = await collection.insertOne({
+            email,
+            password: hashedPassword,
+            can_create_users: !!can_create_users,
+            created_at: new Date()
+        });
+        
+        return { success: true, id: result.insertedId };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+async function deleteUser(id) {
+    try {
+        const database = await getDb();
+        const collection = database.collection('users');
+        const result = await collection.deleteOne({ _id: new ObjectId(id) });
+        if (result.deletedCount === 0) {
+            return { success: false, error: 'Usuário não encontrado' };
+        }
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
 module.exports = {
     getPlaces,
     getActivities,
@@ -375,5 +470,11 @@ module.exports = {
     addActivity,
     updateActivity,
     deleteActivity,
-    savePlaceDirectly
+    savePlaceDirectly,
+    initSuperUser,
+    getUserByEmail,
+    getUserById,
+    getUsers,
+    createUser,
+    deleteUser
 };
