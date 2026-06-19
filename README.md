@@ -25,4 +25,4 @@ meu-projeto-places/
 │   └── mongodb.js       # Lógica de conexão e queries ao MongoDB
 ├── .env                 # Variáveis sensíveis (Credenciais)
 ├── package.json         # Dependências e scripts
-└── README.md            # Documentação
+└── README.md            # Documentação# meu-projeto-places
