@@ -49,7 +49,11 @@ window.api = {
 
     // --- Auth & Users ---
     login: (email, password) => window.api._post('/api/auth/login', { email, password }),
-    checkSession: () => window.api._get('/api/auth/me'),
+    checkSession: async () => {
+        const res = await fetch('/api/auth/me', { headers: window.api._getHeaders() });
+        if (!res.ok) throw new Error('Não autenticado');
+        return res.json();
+    },
     getUsers: () => window.api._get('/api/users'),
     createUser: (user) => window.api._post('/api/users', user),
     deleteUser: (id) => window.api._delete(`/api/users/${id}`),
