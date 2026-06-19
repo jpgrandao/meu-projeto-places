@@ -2,30 +2,57 @@ const socket = io();
 
 window.api = {
     // --- Utils ---
+    _getHeaders: () => {
+        const token = localStorage.getItem('token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        return headers;
+    },
+    _handleResponse: async (res) => {
+        if (res.status === 401 || res.status === 403) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.reload();
+            throw new Error('Sessão expirada ou acesso negado.');
+        }
+        return res.json();
+    },
     _post: async (url, body) => {
         const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: window.api._getHeaders(),
             body: JSON.stringify(body)
         });
-        return res.json();
+        return window.api._handleResponse(res);
     },
     _put: async (url, body) => {
         const res = await fetch(url, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: window.api._getHeaders(),
             body: JSON.stringify(body)
         });
-        return res.json();
+        return window.api._handleResponse(res);
     },
     _get: async (url) => {
-        const res = await fetch(url);
-        return res.json();
+        const res = await fetch(url, {
+            headers: window.api._getHeaders()
+        });
+        return window.api._handleResponse(res);
     },
     _delete: async (url) => {
-        const res = await fetch(url, { method: 'DELETE' });
-        return res.json();
+        const res = await fetch(url, { 
+            method: 'DELETE',
+            headers: window.api._getHeaders()
+        });
+        return window.api._handleResponse(res);
     },
+
+    // --- Auth & Users ---
+    login: (email, password) => window.api._post('/api/auth/login', { email, password }),
+    checkSession: () => window.api._get('/api/auth/me'),
+    getUsers: () => window.api._get('/api/users'),
+    createUser: (user) => window.api._post('/api/users', user),
+    deleteUser: (id) => window.api._delete(`/api/users/${id}`),
 
     // --- Places ---
     getPlaces: (filters) => window.api._post('/api/places', filters),
