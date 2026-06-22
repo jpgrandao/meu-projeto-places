@@ -1,6 +1,6 @@
 {
   "name": "meu-projeto-places",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Meu Projeto Places",
   "author": "Joao",
   "main": "backend/server.js",

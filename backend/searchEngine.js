@@ -1,4 +1,4 @@
-const { savePlaceDirectly } = require('./database/mongodb');
+const { savePlaceDirectly, getPlaceById } = require('./database/mongodb');
 
 // Estado interno do Motor de Busca
 let engineState = {
@@ -185,8 +185,8 @@ async function runSearchLoop(io) {
 
                 const placeName = place.displayName?.text || 'Sem nome';
                 
-                const saveCheck = await savePlaceDirectly({ place_id: place.id });
-                if (saveCheck.success && !saveCheck.isNew) {
+                const existing = await getPlaceById(place.id);
+                if (existing && existing.nome) {
                     const skipLog = addLog(`[Pulado] "${placeName}" já existe no banco de dados.`, 'skip');
                     sendProgress(io, skipLog);
                     continue;

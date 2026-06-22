@@ -1,7 +1,7 @@
 const { MongoClient, ObjectId } = require('mongodb');
 const path = require('path');
 const bcrypt = require('bcryptjs');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const uri = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://mongo:27017/seo_places';
 const client = new MongoClient(uri);
@@ -339,20 +339,29 @@ async function savePlaceDirectly(placeDoc) {
         const database = await getDb();
         const collection = database.collection('places');
         
-        // Verifica se local já existe por place_id
+        // Verifica se local já existe e se é um registro completo (tem nome)
         const existing = await collection.findOne({ place_id: placeDoc.place_id });
-        if (existing) {
+        if (existing && existing.nome) {
             return { success: true, isNew: false, id: existing.place_id };
         }
         
-        const doc = {
-            ...placeDoc,
-            created_at: new Date(),
-            updated_at: new Date()
+        const docToUpdate = {
+            $set: {
+                ...placeDoc,
+                updated_at: new Date()
+            },
+            $setOnInsert: {
+                created_at: new Date()
+            }
         };
         
-        await collection.insertOne(doc);
-        return { success: true, isNew: true, id: placeDoc.place_id };
+        const result = await collection.updateOne(
+            { place_id: placeDoc.place_id },
+            docToUpdate,
+            { upsert: true }
+        );
+        
+        return { success: true, isNew: result.upsertedCount > 0 || !existing, id: placeDoc.place_id };
     } catch (error) {
         console.error('Erro ao salvar local diretamente:', error);
         return { success: false, error: error.message };
