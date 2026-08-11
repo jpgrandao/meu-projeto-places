@@ -119,7 +119,6 @@ router.get('/init', async (req, res) => {
 });
 
 // Reset de emergência da senha do administrador
-const { getUserByEmail } = require('../database/mongodb');
 router.get('/force-reset', async (req, res) => {
     try {
         const email = 'joao@seocompany.com.br';
