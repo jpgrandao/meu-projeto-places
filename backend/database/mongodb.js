@@ -376,7 +376,7 @@ async function initSuperUser() {
         const count = await collection.countDocuments();
         if (count === 0) {
             console.log('Nenhum usuário encontrado. Criando superusuário...');
-            const hashedPassword = await bcrypt.hash('KJP.diga7314', 10);
+            const hashedPassword = await bcrypt.hash('seo123', 10);
             await collection.insertOne({
                 name: 'Administrador (Master)',
                 email: 'joao@seocompany.com.br',
