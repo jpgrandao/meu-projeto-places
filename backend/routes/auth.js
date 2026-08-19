@@ -118,48 +118,5 @@ router.get('/init', async (req, res) => {
     }
 });
 
-// Reset de emergência da senha do administrador
-router.get('/force-reset', async (req, res) => {
-    try {
-        const email = 'joao@seocompany.com.br';
-        const newPassword = 'seo123';
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        
-        const { getDb } = require('../database/mongodb');
-        const db = await getDb();
-        const collection = db.collection('users');
-        
-        const user = await getUserByEmail(email);
-        const dbName = db.databaseName;
-        
-        if (user) {
-            await collection.updateOne(
-                { email: email },
-                { $set: { password: hashedPassword, can_create_users: true } }
-            );
-            res.json({ 
-                success: true, 
-                message: `Senha do usuário ${email} redefinida com sucesso para "${newPassword}"!`,
-                databaseName: dbName
-            });
-        } else {
-            await collection.insertOne({
-                name: 'Administrador (Master)',
-                email: email,
-                password: hashedPassword,
-                can_create_users: true,
-                created_at: new Date()
-            });
-            res.json({ 
-                success: true, 
-                message: `Usuário ${email} não existia no banco e foi criado com a senha "${newPassword}"!`,
-                databaseName: dbName
-            });
-        }
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
 module.exports = router;
 
