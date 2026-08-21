@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=4">
+    <link rel="stylesheet" href="styles.css?v=5">
 </head>
 
 <body>
@@ -24,6 +24,15 @@
                 <button class="nav-tab hidden" id="usersTabBtn" data-target="usersSection">👥 Usuários</button>
             </nav>
             <div class="header-actions">
+                <!-- Seletor / Badge de Empresa Ativa -->
+                <div id="companyBadgeContainer" class="company-badge-container hidden">
+                    <button id="btnSelectCompany" class="company-badge-btn" title="Empresa Ativa (Clique para alternar)">
+                        <span class="company-badge-icon">🏢</span>
+                        <span id="headerCompanyName">SEO Company</span>
+                        <span class="company-badge-arrow">▾</span>
+                    </button>
+                </div>
+
                 <div class="user-menu-container">
                     <button id="btnUserMenu" class="user-avatar-btn" style="display: none;">
                         <span id="headerUserName">U</span>
@@ -35,6 +44,9 @@
                         </div>
                         <ul class="dropdown-list">
                             <li><button id="btnProfile">👤 Perfil</button></li>
+                            <li id="liSwitchCompany" class="hidden"><button id="btnDropdownSwitchCompany">🔄 Trocar de Cliente</button></li>
+                            <li id="liNewCompany" class="hidden"><button id="btnDropdownNewCompany">➕ Novo Cliente</button></li>
+                            <li id="liAllCompanies" class="hidden"><button id="btnDropdownAllCompanies">🏢 Todos os Clientes</button></li>
                             <li id="liNewUser" class="hidden"><button id="btnDropdownNewUser">➕ Novo usuário</button></li>
                             <li id="liAllUsers" class="hidden"><button id="btnDropdownAllUsers">👥 Todos os usuários</button></li>
                             <li><button id="btnAbout">ℹ️ Sobre</button></li>
@@ -313,6 +325,12 @@
                                 <label for="userPassword">Senha</label>
                                 <input type="password" id="userPassword" placeholder="Defina uma senha" required>
                             </div>
+                            <div id="userCompanyGroup" class="form-group hidden">
+                                <label for="userCompany">Empresa / Cliente</label>
+                                <select id="userCompany">
+                                    <option value="">Selecione uma empresa...</option>
+                                </select>
+                            </div>
                             <div class="form-group" style="flex-direction: row; align-items: center; gap: 10px;">
                                 <input type="checkbox" id="userCanCreateUsers" style="width: auto; margin: 0;">
                                 <label for="userCanCreateUsers" style="margin: 0; font-weight: normal; cursor: pointer;">Permitir que este usuário crie outros usuários (Administrador)</label>
@@ -331,6 +349,7 @@
                                     <tr>
                                         <th>Nome</th>
                                         <th>E-mail</th>
+                                        <th id="thUserCompany" class="hidden">Empresa</th>
                                         <th>É Administrador?</th>
                                         <th>Data de Cadastro</th>
                                         <th>Ações</th>
@@ -360,6 +379,85 @@
             <div class="modal-footer">
                 <button id="btnModalCancel" class="btn-secondary">Cancelar</button>
                 <button id="btnModalSave" class="btn-primary">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Novo / Editar Cliente (Empresa) -->
+    <div id="companyModal" class="modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h3 id="companyModalTitle">Novo Cliente (Empresa)</h3>
+                <span class="close-modal" id="closeCompanyModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="formCompany">
+                    <input type="hidden" id="companyId">
+                    <div class="form-group">
+                        <label for="companyName">Nome da Empresa / Cliente</label>
+                        <input type="text" id="companyName" placeholder="Ex: Nova Empresa Ltda" required>
+                    </div>
+                    <div id="companyError" class="login-error hidden" style="margin-top: 1rem;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button id="btnCompanyCancel" class="btn-secondary">Cancelar</button>
+                <button id="btnCompanySave" class="btn-primary">Salvar Cliente</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Troca Rápida de Cliente -->
+    <div id="switchCompanyModal" class="modal">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3>🔄 Selecionar / Trocar de Cliente</h3>
+                <span class="close-modal" id="closeSwitchCompanyModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">Selecione o cliente abaixo para visualizar e gerenciar seus dados de Places, Cidades e Atividades.</p>
+                <div class="filter-group">
+                    <input type="text" id="searchCompanySwitchInput" placeholder="Pesquisar cliente..." style="margin-bottom: 1rem;">
+                </div>
+                <div id="switchCompanyList" class="company-select-list">
+                    <!-- Lista de empresas injetada via JS -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnSwitchCompanyCancel" class="btn-secondary">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Gerenciamento de Todos os Clientes -->
+    <div id="companiesListModal" class="modal">
+        <div class="modal-content" style="max-width: 750px;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>🏢 Gerenciador de Clientes (Empresas)</h3>
+                <span class="close-modal" id="closeCompaniesListModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0;">Lista de todas as empresas cadastradas no sistema.</p>
+                    <button id="btnOpenNewCompanyModal" class="btn-primary btn-small" style="width: auto; margin: 0; background: #10b981;">➕ Cadastrar Novo Cliente</button>
+                </div>
+                <div class="table-wrapper" style="max-height: 350px; overflow-y: auto;">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Nome do Cliente</th>
+                                <th>Data de Cadastro</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="companiesTableBody">
+                            <!-- Linhas injetadas via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnCloseCompaniesListModal" class="btn-secondary">Fechar</button>
             </div>
         </div>
     </div>
@@ -413,8 +511,8 @@
             <div class="modal-body">
                 <div style="font-size: 3rem; margin-bottom: 1rem;">🌍</div>
                 <p style="margin-bottom: 0.5rem; color: #a1a1aa;">Versão do Sistema</p>
-                <h2 style="margin: 0; color: #fff; font-size: 2rem;">v1.0.1</h2>
-                <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #71717a;">Painel administrativo para SEO e gestão de locais, desenvolvido com NodeJS e MongoDB.</p>
+                <h2 style="margin: 0; color: #fff; font-size: 2rem;">v2.0.0 (Multi-Tenant)</h2>
+                <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #71717a;">Painel administrativo de SEO e gestão de locais com arquitetura de múltiplas empresas (Multi-Tenant), desenvolvido com NodeJS e MongoDB.</p>
             </div>
         </div>
     </div>
@@ -440,8 +538,8 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/api.js?v=4"></script>
-    <script src="js/app.js?v=4"></script>
+    <script src="js/api.js?v=5"></script>
+    <script src="js/app.js?v=5"></script>
 </body>
 
 </html>

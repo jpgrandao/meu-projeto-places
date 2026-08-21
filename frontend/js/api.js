@@ -4,16 +4,22 @@ window.api = {
     // --- Utils ---
     _getHeaders: () => {
         const token = localStorage.getItem('token');
+        const currentCompanyId = localStorage.getItem('current_company_id');
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (currentCompanyId) headers['x-company-id'] = currentCompanyId;
         return headers;
     },
     _handleResponse: async (res) => {
         if (res.status === 401 || res.status === 403) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.reload();
-            throw new Error('Sessão expirada ou acesso negado.');
+            const errData = await res.json().catch(() => ({}));
+            if (res.status === 401 || (errData.error && errData.error.includes('Sessão expirada'))) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                localStorage.removeItem('current_company_id');
+                window.location.reload();
+            }
+            throw new Error(errData.error || 'Sessão expirada ou acesso negado.');
         }
         return res.json();
     },
@@ -59,6 +65,13 @@ window.api = {
     createUser: (user) => window.api._post('/api/users', user),
     updateUser: (id, user) => window.api._put(`/api/users/${id}`, user),
     deleteUser: (id) => window.api._delete(`/api/users/${id}`),
+
+    // --- Companies (Empresas / Clientes) ---
+    getCompanies: () => window.api._get('/api/companies'),
+    createCompany: (name) => window.api._post('/api/companies', { name }),
+    updateCompany: (id, name) => window.api._put(`/api/companies/${id}`, { name }),
+    deleteCompany: (id) => window.api._delete(`/api/companies/${id}`),
+    switchCompany: (companyId) => window.api._post('/api/companies/switch', { companyId }),
 
     // --- Places ---
     getPlaces: (filters) => window.api._post('/api/places', filters),

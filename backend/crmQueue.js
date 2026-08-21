@@ -1,6 +1,6 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
-const { getPlaceById, updateImportedStatus } = require('./database/mongodb');
+const { getPlaceById } = require('./database/mongodb');
 
 const queue = [];
 let isProcessing = false;
@@ -13,11 +13,13 @@ async function processQueue() {
     isProcessing = true;
 
     while (queue.length > 0) {
-        const placeId = queue[0];
+        const item = queue[0];
+        const placeId = typeof item === 'object' ? item.placeId : item;
+        const companyId = typeof item === 'object' ? item.companyId : null;
 
         try {
             console.log(`Processando fila CRM para place_id: ${placeId}`);
-            const place = await getPlaceById(placeId);
+            const place = await getPlaceById(placeId, companyId);
 
             if (!place) {
                 console.error(`Local não encontrado no banco de dados para place_id: ${placeId}`);
@@ -28,7 +30,6 @@ async function processQueue() {
             // Format internationalPhoneNumber
             let contactId = "";
             if (place.internationalPhoneNumber) {
-                // Remove spaces and special characters
                 contactId = place.internationalPhoneNumber.replace(/\D/g, ''); 
             }
 
@@ -181,21 +182,20 @@ async function processQueue() {
             console.error(`Erro inesperado ao processar place_id ${placeId} na fila CRM:`, error);
         }
 
-        // Remove from queue after processing (success or failure)
         queue.shift();
-        
-        // Wait 1 second before processing the next item to avoid rate limit issues
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     isProcessing = false;
 }
 
-function addToCRMQueue(placeId) {
-    if (!queue.includes(placeId)) {
-        queue.push(placeId);
-        console.log(`Adicionado à fila do CRM: ${placeId}. Tamanho da fila: ${queue.length}`);
-        processQueue(); // Start processing if not already running
+function addToCRMQueue(placeId, companyId = null) {
+    const item = { placeId, companyId };
+    const exists = queue.some(q => (typeof q === 'object' ? q.placeId : q) === placeId);
+    if (!exists) {
+        queue.push(item);
+        console.log(`Adicionado à fila do CRM: ${placeId} (Empresa: ${companyId}). Tamanho da fila: ${queue.length}`);
+        processQueue();
     } else {
         console.log(`Place ID ${placeId} já está na fila do CRM.`);
     }

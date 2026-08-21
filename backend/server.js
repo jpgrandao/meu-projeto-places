@@ -3,7 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const dotenv = require('dotenv');
-const { initSuperUser } = require('./database/mongodb');
+const { initMultiTenantAndSuperUser } = require('./database/mongodb');
 
 // Load env vars
 dotenv.config();
@@ -26,13 +26,15 @@ app.set('io', io);
 // API Routes
 const authRoutes = require('./routes/auth');
 const usersRoutes = require('./routes/users');
+const companiesRoutes = require('./routes/companies');
 const apiRoutes = require('./routes/api');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/companies', companiesRoutes);
 app.use('/api', apiRoutes);
 
-// Socket.io eventos (se necessário algo além do motor de busca)
+// Socket.io eventos
 io.on('connection', (socket) => {
     console.log('Um cliente conectou ao WebSocket:', socket.id);
 
@@ -42,8 +44,8 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, async () => {
-    console.log(`Servidor rodando na porta http://localhost:${PORT}`);
+    console.log(`Servidor rodando em http://localhost:${PORT}`);
     
-    // Inicializa o superusuário ao ligar o servidor
-    await initSuperUser();
+    // Inicializa multi-tenant e superusuário ao ligar o servidor
+    await initMultiTenantAndSuperUser();
 });

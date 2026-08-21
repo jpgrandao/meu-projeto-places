@@ -18,15 +18,32 @@ function verifyToken(req, res, next) {
             return res.status(401).json({ error: 'Falha ao autenticar token. Sessão expirada.' });
         }
         
-        // Salva os dados do usuário para as próximas rotas
         req.user = decoded;
+
+        // Determina a empresa ativa para a requisição
+        const customCompanyHeader = req.headers['x-company-id'];
+        if (decoded.is_master && customCompanyHeader) {
+            req.company_id = customCompanyHeader;
+        } else if (decoded.is_master) {
+            req.company_id = decoded.current_company_id || decoded.company_id;
+        } else {
+            req.company_id = decoded.company_id;
+        }
+
         next();
     });
 }
 
 function requireAdmin(req, res, next) {
-    if (!req.user || !req.user.can_create_users) {
+    if (!req.user || (!req.user.can_create_users && !req.user.is_master)) {
         return res.status(403).json({ error: 'Acesso negado. Você não tem permissão para gerenciar usuários.' });
+    }
+    next();
+}
+
+function requireMaster(req, res, next) {
+    if (!req.user || !req.user.is_master) {
+        return res.status(403).json({ error: 'Acesso negado. Recurso exclusivo para Usuário Master.' });
     }
     next();
 }
@@ -34,5 +51,6 @@ function requireAdmin(req, res, next) {
 module.exports = {
     verifyToken,
     requireAdmin,
+    requireMaster,
     JWT_SECRET
 };

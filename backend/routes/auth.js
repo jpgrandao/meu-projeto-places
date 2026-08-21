@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { getUserByEmail } = require('../database/mongodb');
+const { getUserByEmail, getCompanyById, getCompanies, getUserById, updateUserById, initMultiTenantAndSuperUser } = require('../database/mongodb');
 const { verifyToken, JWT_SECRET } = require('../middleware/authMiddleware');
 
 // Login
@@ -23,15 +23,33 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Credenciais inválidas.' });
         }
 
+        const isMaster = !!user.is_master;
+        const companyId = user.company_id ? user.company_id.toString() : null;
+        const currentCompanyId = (user.current_company_id || user.company_id) ? (user.current_company_id || user.company_id).toString() : null;
+
+        // Buscar nome da empresa ativa
+        let companyName = 'N/A';
+        if (currentCompanyId) {
+            const comp = await getCompanyById(currentCompanyId);
+            if (comp) companyName = comp.name;
+        }
+
+        let companiesList = [];
+        if (isMaster) {
+            companiesList = await getCompanies();
+        }
+
         // Criar o payload do token
         const payload = {
             id: user._id,
             email: user.email,
             name: user.name || 'Usuário',
-            can_create_users: user.can_create_users
+            can_create_users: !!user.can_create_users,
+            is_master: isMaster,
+            company_id: companyId,
+            current_company_id: currentCompanyId
         };
 
-        // Gerar o token com expiração de 24 horas
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
 
         res.json({
@@ -41,10 +59,16 @@ router.post('/login', async (req, res) => {
                 id: user._id,
                 email: user.email,
                 name: user.name || 'Usuário',
-                can_create_users: user.can_create_users
-            }
+                can_create_users: !!user.can_create_users,
+                is_master: isMaster,
+                company_id: companyId,
+                current_company_id: currentCompanyId,
+                company_name: companyName
+            },
+            companies: companiesList
         });
     } catch (error) {
+        console.error('Erro no login:', error);
         res.status(500).json({ error: 'Erro no login.' });
     }
 });
@@ -52,12 +76,26 @@ router.post('/login', async (req, res) => {
 // Checar sessão
 router.get('/me', verifyToken, async (req, res) => {
     try {
-        // Buscar o usuário atualizado no banco
-        const { getUserById } = require('../database/mongodb');
         const user = await getUserById(req.user.id);
-        
         if (!user) {
             return res.status(401).json({ error: 'Usuário não encontrado.' });
+        }
+
+        const isMaster = !!user.is_master;
+        const companyId = user.company_id ? user.company_id.toString() : null;
+        
+        // Se Master, a empresa ativa vem de req.company_id ou current_company_id
+        const activeCompanyId = isMaster && req.company_id ? req.company_id : ((user.current_company_id || user.company_id) ? (user.current_company_id || user.company_id).toString() : null);
+
+        let companyName = 'N/A';
+        if (activeCompanyId) {
+            const comp = await getCompanyById(activeCompanyId);
+            if (comp) companyName = comp.name;
+        }
+
+        let companiesList = [];
+        if (isMaster) {
+            companiesList = await getCompanies();
         }
 
         res.json({
@@ -66,10 +104,16 @@ router.get('/me', verifyToken, async (req, res) => {
                 id: user._id,
                 email: user.email,
                 name: user.name || 'Usuário',
-                can_create_users: user.can_create_users
-            }
+                can_create_users: !!user.can_create_users,
+                is_master: isMaster,
+                company_id: companyId,
+                current_company_id: activeCompanyId,
+                company_name: companyName
+            },
+            companies: companiesList
         });
     } catch (error) {
+        console.error('Erro ao verificar sessão:', error);
         res.status(500).json({ error: 'Erro ao verificar sessão.' });
     }
 });
@@ -78,7 +122,6 @@ router.get('/me', verifyToken, async (req, res) => {
 router.put('/profile', verifyToken, async (req, res) => {
     try {
         const { name, currentPassword, newPassword } = req.body;
-        const { getUserById, updateUserById } = require('../database/mongodb');
         
         const user = await getUserById(req.user.id);
         if (!user) {
@@ -107,16 +150,14 @@ router.put('/profile', verifyToken, async (req, res) => {
     }
 });
 
-// Forçar inicialização (caso de emergência)
-const { initSuperUser } = require('../database/mongodb');
+// Forçar inicialização (emergência)
 router.get('/init', async (req, res) => {
     try {
-        await initSuperUser();
-        res.json({ success: true, message: 'Processo de inicialização do superusuário rodou! Tente fazer login agora com joao@seocompany.com.br' });
+        await initMultiTenantAndSuperUser();
+        res.json({ success: true, message: 'Processo de inicialização multi-tenant concluído!' });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
 module.exports = router;
-

@@ -15,12 +15,119 @@ async function getDb() {
     return connectedClient.db('seo_places');
 }
 
-async function getPlaces(filters = {}) {
+function toObjectId(id) {
+    if (!id) return null;
+    if (id instanceof ObjectId) return id;
+    try {
+        return new ObjectId(id);
+    } catch (e) {
+        return null;
+    }
+}
+
+// --- COMPANIES (EMPRESAS / CLIENTES) ---
+
+async function getCompanies() {
+    try {
+        const database = await getDb();
+        return await database.collection('companies').find({ active: { $ne: false } }).sort({ name: 1 }).toArray();
+    } catch (error) {
+        console.error('Erro ao buscar empresas:', error);
+        return [];
+    }
+}
+
+async function getCompanyById(id) {
+    try {
+        const database = await getDb();
+        const objId = toObjectId(id);
+        if (!objId) return null;
+        return await database.collection('companies').findOne({ _id: objId });
+    } catch (error) {
+        console.error('Erro ao buscar empresa por ID:', error);
+        return null;
+    }
+}
+
+async function createCompany(name, createdBy = null) {
+    try {
+        if (!name || !name.trim()) {
+            return { success: false, error: 'Nome da empresa é obrigatório.' };
+        }
+        const database = await getDb();
+        const collection = database.collection('companies');
+
+        const existing = await collection.findOne({ name: { $regex: `^${name.trim()}$`, $options: 'i' } });
+        if (existing) {
+            return { success: false, error: 'Já existe uma empresa cadastrada com este nome.' };
+        }
+
+        const doc = {
+            name: name.trim(),
+            active: true,
+            created_at: new Date(),
+            created_by: toObjectId(createdBy)
+        };
+
+        const result = await collection.insertOne(doc);
+        return { success: true, id: result.insertedId, name: doc.name };
+    } catch (error) {
+        console.error('Erro ao criar empresa:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+async function updateCompany(id, updates) {
+    try {
+        const objId = toObjectId(id);
+        if (!objId) return { success: false, error: 'ID de empresa inválido.' };
+
+        const database = await getDb();
+        const collection = database.collection('companies');
+
+        const setObj = { updated_at: new Date() };
+        if (updates.name) setObj.name = updates.name.trim();
+
+        await collection.updateOne({ _id: objId }, { $set: setObj });
+        return { success: true };
+    } catch (error) {
+        console.error('Erro ao atualizar empresa:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+async function deleteCompany(id) {
+    try {
+        const objId = toObjectId(id);
+        if (!objId) return { success: false, error: 'ID de empresa inválido.' };
+
+        const database = await getDb();
+        
+        // Exclui os dados vinculados a essa empresa
+        await database.collection('places').deleteMany({ company_id: objId });
+        await database.collection('activities').deleteMany({ company_id: objId });
+        await database.collection('cities').deleteMany({ company_id: objId });
+        await database.collection('neighborhoods').deleteMany({ company_id: objId });
+        await database.collection('users').deleteMany({ company_id: objId, is_master: { $ne: true } });
+        
+        // Remove a empresa
+        await database.collection('companies').deleteOne({ _id: objId });
+
+        return { success: true };
+    } catch (error) {
+        console.error('Erro ao excluir empresa:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// --- PLACES ---
+
+async function getPlaces(filters = {}, companyId) {
     const database = await getDb();
     const collection = database.collection('places');
 
-    // Lógica de filtro avançado
-    const query = {};
+    const cId = toObjectId(companyId);
+    const query = cId ? { company_id: cId } : {};
     
     if (filters.nome) {
         query.nome = { $regex: filters.nome, $options: 'i' };
@@ -69,15 +176,60 @@ async function getPlaces(filters = {}) {
     return { data, total };
 }
 
-async function getActivities() {
-    const database = await getDb();
-    const collection = database.collection('activities');
+async function getPlaceById(placeId, companyId) {
+    try {
+        const database = await getDb();
+        const collection = database.collection('places');
+        const cId = toObjectId(companyId);
+        const query = { place_id: placeId };
+        if (cId) query.company_id = cId;
 
-    const cursor = collection.find({}).sort({ nome: 1 });
-    return await cursor.toArray();
+        const place = await collection.findOne(query);
+        return place;
+    } catch (error) {
+        console.error('Erro ao buscar local por ID:', error);
+        return null;
+    }
 }
 
-async function updatePlaceFromGoogle(placeId) {
+async function savePlaceDirectly(placeDoc, companyId) {
+    try {
+        const database = await getDb();
+        const collection = database.collection('places');
+
+        const cId = toObjectId(companyId);
+        if (!cId) {
+            return { success: false, error: 'Empresa (companyId) não definida ao salvar local.' };
+        }
+
+        const filter = { place_id: placeDoc.place_id, company_id: cId };
+        
+        const existing = await collection.findOne(filter);
+        if (existing && existing.nome) {
+            return { success: true, isNew: false, id: existing.place_id };
+        }
+        
+        const docToUpdate = {
+            $set: {
+                ...placeDoc,
+                company_id: cId,
+                updated_at: new Date()
+            },
+            $setOnInsert: {
+                created_at: new Date()
+            }
+        };
+        
+        const result = await collection.updateOne(filter, docToUpdate, { upsert: true });
+        
+        return { success: true, isNew: result.upsertedCount > 0 || !existing, id: placeDoc.place_id };
+    } catch (error) {
+        console.error('Erro ao salvar local diretamente:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+async function updatePlaceFromGoogle(placeId, companyId) {
     try {
         const apiKey = process.env.GOOGLE_MAPS_API_KEY;
         if (!apiKey) {
@@ -98,6 +250,10 @@ async function updatePlaceFromGoogle(placeId) {
         const database = await getDb();
         const collection = database.collection('places');
 
+        const cId = toObjectId(companyId);
+        const filter = { place_id: placeId };
+        if (cId) filter.company_id = cId;
+
         const updateDoc = {
             $set: {
                 nome: result.name,
@@ -111,7 +267,7 @@ async function updatePlaceFromGoogle(placeId) {
             }
         };
 
-        await collection.updateOne({ place_id: placeId }, updateDoc);
+        await collection.updateOne(filter, updateDoc);
         return { success: true };
     } catch (error) {
         console.error('Erro ao atualizar local do Google:', error);
@@ -119,10 +275,14 @@ async function updatePlaceFromGoogle(placeId) {
     }
 }
 
-async function updateImportedStatus(placeId, isImported) {
+async function updateImportedStatus(placeId, isImported, companyId) {
     try {
         const database = await getDb();
         const collection = database.collection('places');
+
+        const cId = toObjectId(companyId);
+        const filter = { place_id: placeId };
+        if (cId) filter.company_id = cId;
 
         const updateDoc = {
             $set: {
@@ -131,7 +291,7 @@ async function updateImportedStatus(placeId, isImported) {
             }
         };
 
-        await collection.updateOne({ place_id: placeId }, updateDoc);
+        await collection.updateOne(filter, updateDoc);
         return { success: true };
     } catch (error) {
         console.error('Erro ao atualizar status de importação:', error);
@@ -139,35 +299,104 @@ async function updateImportedStatus(placeId, isImported) {
     }
 }
 
-async function getPlaceById(placeId) {
+// --- ACTIVITIES (ATIVIDADES / TERMOS DE BUSCA) ---
+
+async function getActivities(companyId) {
+    const database = await getDb();
+    const collection = database.collection('activities');
+    const cId = toObjectId(companyId);
+    const query = cId ? { company_id: cId } : {};
+
+    const cursor = collection.find(query).sort({ nome: 1 });
+    return await cursor.toArray();
+}
+
+async function addActivity(activity, companyId) {
     try {
         const database = await getDb();
-        const collection = database.collection('places');
+        const collection = database.collection('activities');
+        const cId = toObjectId(companyId);
 
-        const place = await collection.findOne({ place_id: placeId });
-        return place;
+        const doc = {
+            nome: activity.nome,
+            ativa: activity.ativa || 'V',
+            company_id: cId,
+            created_at: new Date()
+        };
+        const result = await collection.updateOne(
+            { nome: doc.nome, company_id: cId },
+            { $set: doc },
+            { upsert: true }
+        );
+        return { success: true, id: result.upsertedId || null };
     } catch (error) {
-        console.error('Erro ao buscar local por ID:', error);
-        return null;
+        return { success: false, error: error.message };
     }
 }
 
-async function getCities() {
-    const database = await getDb();
-    const collection = database.collection('cities');
-    return await collection.find({}).sort({ municipio: 1 }).toArray();
+async function updateActivity(id, activity, companyId) {
+    try {
+        const database = await getDb();
+        const collection = database.collection('activities');
+        const cId = toObjectId(companyId);
+
+        const filter = { _id: new ObjectId(id) };
+        if (cId) filter.company_id = cId;
+
+        const updateDoc = {
+            $set: {
+                nome: activity.nome,
+                ativa: activity.ativa,
+                updated_at: new Date()
+            }
+        };
+        const result = await collection.updateOne(filter, updateDoc);
+        return { success: true, modifiedCount: result.modifiedCount };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
 }
 
-async function addCity(city) {
+async function deleteActivity(id, companyId) {
+    try {
+        const database = await getDb();
+        const collection = database.collection('activities');
+        const cId = toObjectId(companyId);
+
+        const filter = { _id: new ObjectId(id) };
+        if (cId) filter.company_id = cId;
+
+        await collection.deleteOne(filter);
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+// --- CITIES (CIDADES) ---
+
+async function getCities(companyId) {
+    const database = await getDb();
+    const collection = database.collection('cities');
+    const cId = toObjectId(companyId);
+    const query = cId ? { company_id: cId } : {};
+
+    return await collection.find(query).sort({ municipio: 1 }).toArray();
+}
+
+async function addCity(city, companyId) {
     try {
         const database = await getDb();
         const collection = database.collection('cities');
+        const cId = toObjectId(companyId);
+
         const doc = {
             municipio: city.municipio,
             estado: city.estado,
             populacao: parseInt(city.populacao) || 0,
-            chave: `${city.municipio}|${city.estado}`,
+            chave: `${city.municipio}|${city.estado}|${cId ? cId.toString() : ''}`,
             status: 'inicial',
+            company_id: cId,
             created_at: new Date()
         };
         const result = await collection.insertOne(doc);
@@ -177,59 +406,83 @@ async function addCity(city) {
     }
 }
 
-async function updateCity(id, city) {
+async function updateCity(id, city, companyId) {
     try {
         const database = await getDb();
         const collection = database.collection('cities');
+        const cId = toObjectId(companyId);
+
+        const filter = { _id: new ObjectId(id) };
+        if (cId) filter.company_id = cId;
+
         const updateDoc = {
             $set: {
                 municipio: city.municipio,
                 estado: city.estado,
                 populacao: parseInt(city.populacao) || 0,
-                chave: `${city.municipio}|${city.estado}`,
+                chave: `${city.municipio}|${city.estado}|${cId ? cId.toString() : ''}`,
                 updated_at: new Date()
             }
         };
-        const result = await collection.updateOne({ _id: new ObjectId(id) }, updateDoc);
+        const result = await collection.updateOne(filter, updateDoc);
         return { success: true, modifiedCount: result.modifiedCount };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-async function deleteCity(id) {
+async function deleteCity(id, companyId) {
     try {
         const database = await getDb();
         const citiesCollection = database.collection('cities');
-        const city = await citiesCollection.findOne({ _id: new ObjectId(id) });
+        const cId = toObjectId(companyId);
+
+        const filter = { _id: new ObjectId(id) };
+        if (cId) filter.company_id = cId;
+
+        const city = await citiesCollection.findOne(filter);
         if (!city) {
             return { success: false, error: 'Cidade não encontrada' };
         }
-        await citiesCollection.deleteOne({ _id: new ObjectId(id) });
+        await citiesCollection.deleteOne(filter);
+
         const neighborhoodsCollection = database.collection('neighborhoods');
-        await neighborhoodsCollection.deleteMany({ municipio: city.municipio, estado: city.estado });
+        const neighFilter = { municipio: city.municipio, estado: city.estado };
+        if (cId) neighFilter.company_id = cId;
+
+        await neighborhoodsCollection.deleteMany(neighFilter);
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-async function getNeighborhoodsByCity(municipio, estado) {
+// --- NEIGHBORHOODS (BAIRROS) ---
+
+async function getNeighborhoodsByCity(municipio, estado, companyId) {
     const database = await getDb();
     const collection = database.collection('neighborhoods');
-    return await collection.find({ municipio, estado }).sort({ bairro: 1 }).toArray();
+    const cId = toObjectId(companyId);
+
+    const query = { municipio, estado };
+    if (cId) query.company_id = cId;
+
+    return await collection.find(query).sort({ bairro: 1 }).toArray();
 }
 
-async function addNeighborhood(neighborhood) {
+async function addNeighborhood(neighborhood, companyId) {
     try {
         const database = await getDb();
         const collection = database.collection('neighborhoods');
+        const cId = toObjectId(companyId);
+
         const doc = {
             bairro: neighborhood.bairro,
             genero: neighborhood.genero || 'N',
             municipio: neighborhood.municipio,
             estado: neighborhood.estado,
-            chave: `${neighborhood.bairro}|${neighborhood.municipio}|${neighborhood.estado}`,
+            chave: `${neighborhood.bairro}|${neighborhood.municipio}|${neighborhood.estado}|${cId ? cId.toString() : ''}`,
+            company_id: cId,
             created_at: new Date()
         };
         const result = await collection.updateOne(
@@ -243,19 +496,23 @@ async function addNeighborhood(neighborhood) {
     }
 }
 
-async function updateNeighborhood(id, neighborhood) {
+async function updateNeighborhood(id, neighborhood, companyId) {
     try {
         const database = await getDb();
         const collection = database.collection('neighborhoods');
-        
-        const original = await collection.findOne({ _id: new ObjectId(id) });
+        const cId = toObjectId(companyId);
+
+        const filter = { _id: new ObjectId(id) };
+        if (cId) filter.company_id = cId;
+
+        const original = await collection.findOne(filter);
         if (!original) {
             return { success: false, error: 'Bairro não encontrado' };
         }
         
         const updatedBairro = neighborhood.bairro || original.bairro;
         const updatedGenero = neighborhood.genero || original.genero;
-        const key = `${updatedBairro}|${original.municipio}|${original.estado}`;
+        const key = `${updatedBairro}|${original.municipio}|${original.estado}|${cId ? cId.toString() : ''}`;
         
         const updateDoc = {
             $set: {
@@ -265,136 +522,47 @@ async function updateNeighborhood(id, neighborhood) {
                 updated_at: new Date()
             }
         };
-        const result = await collection.updateOne({ _id: new ObjectId(id) }, updateDoc);
+        const result = await collection.updateOne(filter, updateDoc);
         return { success: true, modifiedCount: result.modifiedCount };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-async function deleteNeighborhood(id) {
+async function deleteNeighborhood(id, companyId) {
     try {
         const database = await getDb();
         const collection = database.collection('neighborhoods');
-        await collection.deleteOne({ _id: new ObjectId(id) });
+        const cId = toObjectId(companyId);
+
+        const filter = { _id: new ObjectId(id) };
+        if (cId) filter.company_id = cId;
+
+        await collection.deleteOne(filter);
         return { success: true };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-async function addActivity(activity) {
+// --- USERS & MASTER INICIALIZAÇÃO ---
+
+async function getUserByEmail(email) {
     try {
         const database = await getDb();
-        const collection = database.collection('activities');
-        const doc = {
-            nome: activity.nome,
-            ativa: activity.ativa || 'V',
-            created_at: new Date()
-        };
-        const result = await collection.updateOne(
-            { nome: doc.nome },
-            { $set: doc },
-            { upsert: true }
-        );
-        return { success: true, id: result.upsertedId || null };
+        return await database.collection('users').findOne({ email });
     } catch (error) {
-        return { success: false, error: error.message };
-    }
-}
-
-async function updateActivity(id, activity) {
-    try {
-        const database = await getDb();
-        const collection = database.collection('activities');
-        const updateDoc = {
-            $set: {
-                nome: activity.nome,
-                ativa: activity.ativa,
-                updated_at: new Date()
-            }
-        };
-        const result = await collection.updateOne({ _id: new ObjectId(id) }, updateDoc);
-        return { success: true, modifiedCount: result.modifiedCount };
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
-}
-
-async function deleteActivity(id) {
-    try {
-        const database = await getDb();
-        const collection = database.collection('activities');
-        await collection.deleteOne({ _id: new ObjectId(id) });
-        return { success: true };
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
-}
-
-
-
-async function savePlaceDirectly(placeDoc) {
-    try {
-        const database = await getDb();
-        const collection = database.collection('places');
-        
-        // Verifica se local já existe e se é um registro completo (tem nome)
-        const existing = await collection.findOne({ place_id: placeDoc.place_id });
-        if (existing && existing.nome) {
-            return { success: true, isNew: false, id: existing.place_id };
-        }
-        
-        const docToUpdate = {
-            $set: {
-                ...placeDoc,
-                updated_at: new Date()
-            },
-            $setOnInsert: {
-                created_at: new Date()
-            }
-        };
-        
-        const result = await collection.updateOne(
-            { place_id: placeDoc.place_id },
-            docToUpdate,
-            { upsert: true }
-        );
-        
-        return { success: true, isNew: result.upsertedCount > 0 || !existing, id: placeDoc.place_id };
-    } catch (error) {
-        console.error('Erro ao salvar local diretamente:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-async function initSuperUser() {
-    try {
-        const database = await getDb();
-        const collection = database.collection('users');
-        
-        const count = await collection.countDocuments();
-        if (count === 0) {
-            console.log('Nenhum usuário encontrado. Criando superusuário...');
-            const hashedPassword = await bcrypt.hash('seo123', 10);
-            await collection.insertOne({
-                name: 'Administrador (Master)',
-                email: 'joao@seocompany.com.br',
-                password: hashedPassword,
-                can_create_users: true,
-                created_at: new Date()
-            });
-            console.log('Superusuário joao@seocompany.com.br criado com sucesso.');
-        }
-    } catch (error) {
-        console.error('Erro ao inicializar superusuário:', error);
+        console.error('Erro ao buscar usuário por email:', error);
+        return null;
     }
 }
 
 async function getUserById(id) {
     try {
         const database = await getDb();
-        return await database.collection('users').findOne({ _id: new ObjectId(id) });
+        const objId = toObjectId(id);
+        if (!objId) return null;
+        return await database.collection('users').findOne({ _id: objId });
     } catch (error) {
         console.error('Erro ao buscar usuário por ID:', error);
         return null;
@@ -404,10 +572,14 @@ async function getUserById(id) {
 async function updateUserById(id, updates) {
     try {
         const database = await getDb();
-        await database.collection('users').updateOne(
-            { _id: new ObjectId(id) },
-            { $set: updates }
-        );
+        const objId = toObjectId(id);
+        if (!objId) return false;
+
+        const setObj = { ...updates };
+        if (setObj.company_id) setObj.company_id = toObjectId(setObj.company_id);
+        if (setObj.current_company_id) setObj.current_company_id = toObjectId(setObj.current_company_id);
+
+        await database.collection('users').updateOne({ _id: objId }, { $set: setObj });
         return true;
     } catch (error) {
         console.error('Erro ao atualizar usuário:', error);
@@ -415,22 +587,19 @@ async function updateUserById(id, updates) {
     }
 }
 
-async function getUserByEmail(email) {
+async function getUsers(companyId = null, isMaster = false) {
     try {
         const database = await getDb();
         const collection = database.collection('users');
-        return await collection.findOne({ email });
-    } catch (error) {
-        console.error('Erro ao buscar usuário por email:', error);
-        return null;
-    }
-}
 
-async function getUsers() {
-    try {
-        const database = await getDb();
-        const collection = database.collection('users');
-        const users = await collection.find({}, { projection: { password: 0 } }).sort({ created_at: -1 }).toArray();
+        let query = {};
+        if (!isMaster && companyId) {
+            query.company_id = toObjectId(companyId);
+        } else if (companyId) {
+            query.company_id = toObjectId(companyId);
+        }
+
+        const users = await collection.find(query, { projection: { password: 0 } }).sort({ created_at: -1 }).toArray();
         return users;
     } catch (error) {
         console.error('Erro ao buscar lista de usuários:', error);
@@ -438,7 +607,7 @@ async function getUsers() {
     }
 }
 
-async function createUser(name, email, password, can_create_users) {
+async function createUser(name, email, password, can_create_users, companyId = null, isMaster = false) {
     try {
         const database = await getDb();
         const collection = database.collection('users');
@@ -449,27 +618,40 @@ async function createUser(name, email, password, can_create_users) {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const result = await collection.insertOne({
+        const cId = toObjectId(companyId);
+
+        const doc = {
             name: name || 'Usuário',
             email,
             password: hashedPassword,
             can_create_users: !!can_create_users,
+            is_master: !!isMaster,
+            company_id: cId,
+            current_company_id: cId,
             created_at: new Date()
-        });
-        
+        };
+
+        const result = await collection.insertOne(doc);
         return { success: true, id: result.insertedId };
     } catch (error) {
         return { success: false, error: error.message };
     }
 }
 
-async function deleteUser(id) {
+async function deleteUser(id, requestingCompanyId = null, isMaster = false) {
     try {
         const database = await getDb();
         const collection = database.collection('users');
-        const result = await collection.deleteOne({ _id: new ObjectId(id) });
+        const objId = toObjectId(id);
+
+        const filter = { _id: objId };
+        if (!isMaster && requestingCompanyId) {
+            filter.company_id = toObjectId(requestingCompanyId);
+        }
+
+        const result = await collection.deleteOne(filter);
         if (result.deletedCount === 0) {
-            return { success: false, error: 'Usuário não encontrado' };
+            return { success: false, error: 'Usuário não encontrado ou sem permissão para excluí-lo' };
         }
         return { success: true };
     } catch (error) {
@@ -477,7 +659,111 @@ async function deleteUser(id) {
     }
 }
 
+// --- MIGRAÇÃO E INICIALIZAÇÃO MULTI-TENANT ---
+
+async function initMultiTenantAndSuperUser() {
+    try {
+        const database = await getDb();
+        const companiesColl = database.collection('companies');
+        const usersColl = database.collection('users');
+
+        // 1. Verificar/criar a primeira empresa "SEO Company"
+        let seoCompany = await companiesColl.findOne({ name: { $regex: '^SEO Company$', $options: 'i' } });
+        if (!seoCompany) {
+            console.log('Empresa inicial "SEO Company" não encontrada. Criando empresa padrão...');
+            const res = await companiesColl.insertOne({
+                name: 'SEO Company',
+                active: true,
+                created_at: new Date()
+            });
+            seoCompany = { _id: res.insertedId, name: 'SEO Company' };
+            console.log(`Empresa SEO Company criada com ID: ${seoCompany._id}`);
+        }
+        const seoCompanyId = seoCompany._id;
+
+        // 2. Garantir Superusuário Master (Joao Paulo)
+        const masterEmail = 'joao@seocompany.com.br';
+        let masterUser = await usersColl.findOne({ email: masterEmail });
+        if (!masterUser) {
+            console.log(`Criando superusuário master ${masterEmail}...`);
+            const hashedPassword = await bcrypt.hash('seo123', 10);
+            await usersColl.insertOne({
+                name: 'Joao Paulo',
+                email: masterEmail,
+                password: hashedPassword,
+                can_create_users: true,
+                is_master: true,
+                company_id: seoCompanyId,
+                current_company_id: seoCompanyId,
+                created_at: new Date()
+            });
+            console.log(`Superusuário ${masterEmail} criado com sucesso.`);
+        } else {
+            // Atualizar privilégios de Master e associação de empresa se necessário
+            await usersColl.updateOne(
+                { _id: masterUser._id },
+                {
+                    $set: {
+                        is_master: true,
+                        company_id: masterUser.company_id || seoCompanyId,
+                        current_company_id: masterUser.current_company_id || masterUser.company_id || seoCompanyId
+                    }
+                }
+            );
+        }
+
+        // 3. Vincular usuários existentes (Junior, etc) sem company_id para a SEO Company
+        await usersColl.updateMany(
+            { company_id: { $exists: false } },
+            {
+                $set: {
+                    company_id: seoCompanyId,
+                    current_company_id: seoCompanyId,
+                    is_master: false
+                }
+            }
+        );
+
+        // 4. Migrar coleções legadas sem company_id para a SEO Company
+        const collectionsToMigrate = ['places', 'activities', 'cities', 'neighborhoods'];
+        for (const collName of collectionsToMigrate) {
+            const coll = database.collection(collName);
+            const unassignedCount = await coll.countDocuments({ company_id: { $exists: false } });
+            if (unassignedCount > 0) {
+                console.log(`Migrando ${unassignedCount} registros da coleção ${collName} para SEO Company...`);
+                await coll.updateMany(
+                    { company_id: { $exists: false } },
+                    { $set: { company_id: seoCompanyId } }
+                );
+                console.log(`Migração da coleção ${collName} concluída!`);
+            }
+        }
+
+        // 5. Criar índices compostos para performance e isolamento de multi-tenancy
+        await database.collection('places').createIndex({ company_id: 1, place_id: 1 });
+        await database.collection('activities').createIndex({ company_id: 1, nome: 1 });
+        await database.collection('cities').createIndex({ company_id: 1, chave: 1 });
+        await database.collection('neighborhoods').createIndex({ company_id: 1, chave: 1 });
+
+        console.log('Inicialização Multi-Tenant concluída com sucesso!');
+    } catch (error) {
+        console.error('Erro na inicialização Multi-Tenant:', error);
+    }
+}
+
+// Manter retrocompatibilidade com chamada initSuperUser
+async function initSuperUser() {
+    await initMultiTenantAndSuperUser();
+}
+
 module.exports = {
+    getDb,
+    toObjectId,
+    getCompanies,
+    getCompanyById,
+    createCompany,
+    updateCompany,
+    deleteCompany,
     getPlaces,
     getActivities,
     updatePlaceFromGoogle,
@@ -496,6 +782,7 @@ module.exports = {
     deleteActivity,
     savePlaceDirectly,
     initSuperUser,
+    initMultiTenantAndSuperUser,
     getUserByEmail,
     getUsers,
     createUser,

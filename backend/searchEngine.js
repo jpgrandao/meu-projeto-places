@@ -3,6 +3,7 @@ const { savePlaceDirectly, getPlaceById } = require('./database/mongodb');
 // Estado interno do Motor de Busca
 let engineState = {
     status: 'idle', // 'idle' | 'searching' | 'paused'
+    companyId: null,
     queries: [],    // Array de objetos de busca na memória
     currentIndex: 0,
     totalPending: 0,
@@ -134,7 +135,7 @@ async function runSearchLoop(io) {
         const log = addLog('[Sistema] Concluído! Todas as buscas da lista foram processadas.', 'success');
         sendProgress(io, log);
         
-        io.emit('engine-finished-notification', 'A busca de locais do Google Maps foi concluída com sucesso!');
+        if (io) io.emit('engine-finished-notification', 'A busca de locais do Google Maps foi concluída com sucesso!');
         return;
     }
 
@@ -185,7 +186,7 @@ async function runSearchLoop(io) {
 
                 const placeName = place.displayName?.text || 'Sem nome';
                 
-                const existing = await getPlaceById(place.id);
+                const existing = await getPlaceById(place.id, engineState.companyId);
                 if (existing && existing.nome) {
                     const skipLog = addLog(`[Pulado] "${placeName}" já existe no banco de dados.`, 'skip');
                     sendProgress(io, skipLog);
@@ -244,7 +245,7 @@ async function runSearchLoop(io) {
                     businessStatus: place.businessStatus || 'OPERATIONAL'
                 };
 
-                const saveResult = await savePlaceDirectly(placeDoc);
+                const saveResult = await savePlaceDirectly(placeDoc, engineState.companyId);
                 if (saveResult.success) {
                     engineState.newPlacesCount++;
                     const saveLog = addLog(`[Salvo] "${placeName}" cadastrado com sucesso!`, 'save');
@@ -297,7 +298,7 @@ async function runSearchLoop(io) {
 }
 
 // Funções expostas do Motor de Busca
-async function start(config, io) {
+async function start(config, io, companyId = null) {
     if (engineState.status === 'searching') {
         return { success: false, error: 'O motor de busca já está em execução.' };
     }
@@ -308,6 +309,7 @@ async function start(config, io) {
 
     try {
         engineState.status = 'searching';
+        engineState.companyId = companyId;
         engineState.stopRequested = false;
         engineState.newPlacesCount = 0;
         engineState.processedCount = 0;

@@ -30,12 +30,11 @@ async function loadPlaces(isNewSearch = false) {
         limit: limit
     };
 
-    // Chama a função exposta pelo preload.js
     const response = await window.api.getPlaces(filters);
     const places = response.data || [];
     totalResults = response.total || 0;
 
-    placesGrid.innerHTML = ''; // Limpa a lista
+    placesGrid.innerHTML = '';
 
     if (places.length === 0) {
         placesGrid.innerHTML = '<p style="color: var(--text-secondary); text-align: center; grid-column: 1 / -1; padding: 2rem;">Nenhum local encontrado para os filtros selecionados.</p>';
@@ -105,7 +104,6 @@ async function loadPlaces(isNewSearch = false) {
 
 function updatePagination(limit) {
     pageIndicator.textContent = `Página ${currentPage} (Total: ${totalResults})`;
-    
     btnPrev.disabled = currentPage === 1;
     btnNext.disabled = (currentPage * limit) >= totalResults;
 }
@@ -139,7 +137,7 @@ placesGrid.addEventListener('click', async (e) => {
         try {
             const result = await window.api.updatePlace(placeId);
             if (result.success) {
-                await loadPlaces(); // Recarrega para mostrar os novos dados
+                await loadPlaces();
             } else {
                 alert('Erro ao atualizar: ' + result.error);
             }
@@ -164,12 +162,12 @@ placesGrid.addEventListener('change', async (e) => {
             const result = await window.api.updateImportedStatus(placeId, isImported);
             if (!result.success) {
                 alert('Erro ao atualizar status no CRM: ' + result.error);
-                e.target.checked = !isImported; // Reverte o estado em caso de erro
+                e.target.checked = !isImported;
             }
         } catch (error) {
             console.error('Erro:', error);
             alert('Erro inesperado ao atualizar status.');
-            e.target.checked = !isImported; // Reverte o estado em caso de erro
+            e.target.checked = !isImported;
         }
     }
 });
@@ -201,7 +199,6 @@ tabs.forEach(tab => {
             targetSection.classList.add('active-content');
         }
         
-        // Carrega dados conforme a aba ativa
         const targetId = tab.getAttribute('data-target');
         if (targetId === 'activitiesSection') {
             loadActivitiesAdmin();
@@ -217,6 +214,26 @@ tabs.forEach(tab => {
     });
 });
 
+function reloadCurrentTab() {
+    const activeTab = document.querySelector('.nav-tab.active');
+    if (!activeTab) return;
+    const targetId = activeTab.getAttribute('data-target');
+    
+    reloadActivitiesFilter();
+    
+    if (targetId === 'placesSection') {
+        loadPlaces(true);
+    } else if (targetId === 'activitiesSection') {
+        loadActivitiesAdmin();
+    } else if (targetId === 'citiesSection') {
+        loadCitiesAdmin();
+    } else if (targetId === 'searchEngineSection') {
+        loadEngineConfigData();
+    } else if (targetId === 'usersSection') {
+        loadUsersAdmin();
+    }
+}
+
 // --- CONTROLE GERAL DO MODAL DE EDIÇÃO ---
 const editModal = document.getElementById('editModal');
 const btnModalSave = document.getElementById('btnModalSave');
@@ -229,7 +246,6 @@ function showModal(title, bodyHtml, saveCallback) {
     modalTitle.textContent = title;
     modalBody.innerHTML = bodyHtml;
     
-    // Clonagem para remover listeners anteriores e evitar duplicidade
     const newSave = btnModalSave.cloneNode(true);
     btnModalSave.parentNode.replaceChild(newSave, btnModalSave);
     
@@ -302,7 +318,6 @@ async function loadActivitiesAdmin() {
     try {
         let activities = await window.api.getActivitiesList();
         
-        // Aplica o filtro de pesquisa
         const searchInput = document.getElementById('filterActivityName');
         if (searchInput) {
             const term = searchInput.value.trim().toLowerCase();
@@ -340,7 +355,6 @@ async function loadActivitiesAdmin() {
             tableBody.insertAdjacentHTML('beforeend', row);
         });
         
-        // Listeners das ações de atividades
         document.querySelectorAll('.btn-edit-activity').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-id');
@@ -443,16 +457,15 @@ async function loadCitiesAdmin() {
     try {
         let cities = await window.api.getCities();
         
-        // Popula o select de estados
         const stateSelect = document.getElementById('filterCityState');
-        if (stateSelect && stateSelect.options.length <= 1 && cities.length > 0) {
+        if (stateSelect && cities.length > 0) {
             const states = [...new Set(cities.map(c => c.estado))].sort();
+            stateSelect.innerHTML = '<option value="">Todos os Estados</option>';
             states.forEach(st => {
                 stateSelect.insertAdjacentHTML('beforeend', `<option value="${st}">${st}</option>`);
             });
         }
 
-        // Aplica os filtros
         const searchInput = document.getElementById('filterCityName');
         if (searchInput) {
             const term = searchInput.value.trim().toLowerCase();
@@ -535,15 +548,13 @@ async function loadCitiesAdmin() {
             citiesList.insertAdjacentHTML('beforeend', accordionItem);
         });
         
-        // Listeners do Accordion
         document.querySelectorAll('.accordion-header').forEach(header => {
             header.addEventListener('click', (e) => {
-                if (e.target.closest('button')) return; // ignora botões de editar/excluir
+                if (e.target.closest('button')) return;
                 
                 const item = header.closest('.accordion-item');
                 const isOpen = item.classList.contains('open');
                 
-                // Fecha outros
                 document.querySelectorAll('.accordion-item').forEach(other => {
                     if (other !== item) other.classList.remove('open');
                 });
@@ -559,7 +570,6 @@ async function loadCitiesAdmin() {
             });
         });
         
-        // Ações de editar/deletar cidade
         document.querySelectorAll('.btn-edit-city').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-id');
@@ -586,7 +596,6 @@ async function loadCitiesAdmin() {
             });
         });
         
-        // Submit dos formulários de bairro individuais
         document.querySelectorAll('.form-bairro').forEach(form => {
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -616,7 +625,6 @@ async function loadCitiesAdmin() {
             });
         });
         
-        // Auto-Geração de Bairros via IA
         document.querySelectorAll('.btn-generate-bairros-ai').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const municipio = btn.getAttribute('data-municipio');
@@ -683,7 +691,6 @@ function openEditCityModal(id, municipio, estado, populacao) {
     });
 }
 
-// --- CRUD: BAIRROS (DENTRO DA LISTAGEM ACCORDION) ---
 async function loadNeighborhoodsList(municipio, estado, containerElement) {
     if (!containerElement) return;
     
@@ -718,7 +725,6 @@ async function loadNeighborhoodsList(municipio, estado, containerElement) {
             containerElement.insertAdjacentHTML('beforeend', itemHtml);
         });
         
-        // Listeners de ações de bairro
         containerElement.querySelectorAll('.btn-edit-bairro').forEach(btn => {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-id');
@@ -784,7 +790,6 @@ function openEditBairroModal(id, name, gender, municipio, estado, listContainer)
     });
 }
 
-// --- FUNÇÃO AUXILIAR PARA RECARREGAR SELECT DO FILTRO PRINCIPAL ---
 async function reloadActivitiesFilter() {
     try {
         const selectTipo = document.getElementById('filterTipo');
@@ -801,9 +806,13 @@ async function reloadActivitiesFilter() {
             }
         });
     } catch (e) {
-        console.error('Erro ao recarregar filtros:', e);
+        console.error('Erro ao recarregar filtro de atividades:', e);
     }
 }
+
+// --- MOTOR DE BUSCA (UI) ---
+let isEngineRunning = false;
+let isEnginePaused = false;
 
 const engineSelectActivity = document.getElementById('engineSelectActivity');
 const engineSelectState = document.getElementById('engineSelectState');
@@ -812,272 +821,170 @@ const engineBairrosList = document.getElementById('engineBairrosList');
 const btnEngineStart = document.getElementById('btnEngineStart');
 const btnEnginePause = document.getElementById('btnEnginePause');
 const btnEngineStop = document.getElementById('btnEngineStop');
-const btnClearLogs = document.getElementById('btnClearLogs');
-const engineConsole = document.getElementById('engineConsole');
 const engineCurrentStatus = document.getElementById('engineCurrentStatus');
 const engineProgressText = document.getElementById('engineProgressText');
 const engineProgressBar = document.getElementById('engineProgressBar');
+const engineConsole = document.getElementById('engineConsole');
+const btnClearLogs = document.getElementById('btnClearLogs');
 
-let isEngineRunning = false;
-let isEnginePaused = false;
+async function loadEngineConfigData() {
+    try {
+        const activities = await window.api.getActivities();
+        engineSelectActivity.innerHTML = '<option value="">Selecione uma atividade...</option>';
+        activities.forEach(act => {
+            if (act.ativa === 'V') {
+                engineSelectActivity.insertAdjacentHTML('beforeend', `<option value="${act.nome}">${act.nome}</option>`);
+            }
+        });
 
-// Helpers de Log
-function addEngineLog(message, type = 'system') {
-    const time = new Date().toLocaleTimeString('pt-BR', { hour12: false });
-    const div = document.createElement('div');
-    div.className = `log-entry log-${type}`;
-    div.textContent = `[${time}] ${message}`;
-    engineConsole.appendChild(div);
+        const cities = await window.api.getCities();
+        const states = [...new Set(cities.map(c => c.estado))].sort();
+        
+        engineSelectState.innerHTML = '<option value="">Selecione um estado...</option>';
+        states.forEach(st => {
+            engineSelectState.insertAdjacentHTML('beforeend', `<option value="${st}">${st}</option>`);
+        });
+
+        engineSelectCity.innerHTML = '<option value="">Selecione um estado primeiro</option>';
+        engineSelectCity.disabled = true;
+        engineBairrosList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">Selecione uma cidade para carregar os bairros...</p>';
+
+        const statusRes = await window.api.getEngineStatus();
+        updateEngineUIFromStatus(statusRes);
+    } catch (err) {
+        console.error('Erro ao carregar dados do Motor de Busca:', err);
+    }
+}
+
+if (engineSelectState) {
+    engineSelectState.addEventListener('change', async () => {
+        const st = engineSelectState.value;
+        if (!st) {
+            engineSelectCity.innerHTML = '<option value="">Selecione um estado primeiro</option>';
+            engineSelectCity.disabled = true;
+            return;
+        }
+
+        const cities = await window.api.getCities();
+        const filteredCities = cities.filter(c => c.estado === st);
+
+        engineSelectCity.innerHTML = '<option value="">Todas as Cidades deste Estado</option>';
+        filteredCities.forEach(c => {
+            engineSelectCity.insertAdjacentHTML('beforeend', `<option value="${c.municipio}">${c.municipio}</option>`);
+        });
+        engineSelectCity.disabled = false;
+        engineBairrosList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">Selecione uma cidade específica para carregar os bairros...</p>';
+    });
+}
+
+if (engineSelectCity) {
+    engineSelectCity.addEventListener('change', async () => {
+        const city = engineSelectCity.value;
+        const state = engineSelectState.value;
+
+        if (!city) {
+            engineBairrosList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">Todas as cidades serão pesquisadas globalmente no estado. Selecione uma cidade específica para filtrar por bairros.</p>';
+            return;
+        }
+
+        engineBairrosList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">Carregando bairros...</p>';
+        const bairros = await window.api.getNeighborhoods(city, state);
+
+        if (bairros.length === 0) {
+            engineBairrosList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">Nenhum bairro cadastrado para esta cidade.</p>';
+            return;
+        }
+
+        engineBairrosList.innerHTML = `
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.85rem;">
+                <input type="checkbox" id="chkSelectAllBairros" checked style="width: auto;"> Selecionar Todos os Bairros (${bairros.length})
+            </label>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.4rem; margin-top: 0.5rem;">
+                ${bairros.map(b => `
+                    <label style="font-size: 0.85rem; display: flex; align-items: center; gap: 0.3rem;">
+                        <input type="checkbox" class="chk-bairro-engine" value="${b.bairro}" checked style="width: auto;"> ${b.bairro}
+                    </label>
+                `).join('')}
+            </div>
+        `;
+
+        const chkAll = document.getElementById('chkSelectAllBairros');
+        if (chkAll) {
+            chkAll.addEventListener('change', (e) => {
+                document.querySelectorAll('.chk-bairro-engine').forEach(c => c.checked = e.target.checked);
+            });
+        }
+    });
+}
+
+function addEngineLog(msg, type = 'info') {
+    if (!engineConsole) return;
+    const time = new Date().toLocaleTimeString('pt-BR');
+    const entry = document.createElement('div');
+    entry.className = `log-entry log-${type}`;
+    entry.textContent = `[${time}] ${msg}`;
+    engineConsole.appendChild(entry);
     engineConsole.scrollTop = engineConsole.scrollHeight;
 }
 
 if (btnClearLogs) {
     btnClearLogs.addEventListener('click', () => {
-        engineConsole.innerHTML = '<div class="log-entry log-system">Logs limpos.</div>';
+        if (engineConsole) engineConsole.innerHTML = '<div class="log-entry log-system">Logs limpos.</div>';
     });
 }
 
-// Carregar Dados para o Engine
-async function loadEngineConfigData() {
-    if (!engineSelectActivity || !engineSelectState) return;
-    
-    try {
-        // Atividades
-        const activities = await window.api.getActivitiesList();
-        const activeActivities = activities.filter(a => a.ativa === 'V');
-        engineSelectActivity.innerHTML = '<option value="">Selecione a Atividade</option>';
-        if (activeActivities.length === 0) {
-            engineSelectActivity.innerHTML = '<option value="">Nenhuma atividade ativa</option>';
-        } else {
-            activeActivities.forEach(act => {
-                engineSelectActivity.insertAdjacentHTML('beforeend', `<option value="${act.nome}">${act.nome}</option>`);
-            });
-        }
-
-        // Cidades e Estados
-        const cities = await window.api.getCities();
-        engineSelectState.innerHTML = '<option value="">Selecione o Estado</option>';
-        engineSelectCity.innerHTML = '<option value="">Selecione um estado primeiro</option>';
-        engineSelectCity.disabled = true;
-        engineBairrosList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">Selecione uma cidade para carregar os bairros...</p>';
-
-        if (cities.length === 0) {
-            engineSelectState.innerHTML = '<option value="">Nenhuma cidade cadastrada</option>';
-        } else {
-            const states = [...new Set(cities.map(c => c.estado))].sort();
-            states.forEach(st => {
-                engineSelectState.insertAdjacentHTML('beforeend', `<option value="${st}">${st}</option>`);
-            });
-
-            // Lógica para quando selecionar o Estado
-            engineSelectState.addEventListener('change', () => {
-                const selectedState = engineSelectState.value;
-                engineSelectCity.innerHTML = '<option value="">Selecione a Cidade</option>';
-                engineBairrosList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">Selecione uma cidade para carregar os bairros...</p>';
-
-                if (selectedState) {
-                    const stateCities = cities.filter(c => c.estado === selectedState).sort((a, b) => a.municipio.localeCompare(b.municipio));
-                    stateCities.forEach(city => {
-                        engineSelectCity.insertAdjacentHTML('beforeend', `<option value="${city.municipio}">${city.municipio}</option>`);
-                    });
-                    engineSelectCity.disabled = false;
-                } else {
-                    engineSelectCity.innerHTML = '<option value="">Selecione um estado primeiro</option>';
-                    engineSelectCity.disabled = true;
-                }
-            });
-
-            // Lógica para quando selecionar a Cidade
-            engineSelectCity.addEventListener('change', async () => {
-                const selectedState = engineSelectState.value;
-                const selectedCity = engineSelectCity.value;
-
-                if (selectedCity && selectedState) {
-                    engineBairrosList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">Carregando bairros...</p>';
-                    try {
-                        const bairros = await window.api.getNeighborhoods(selectedCity, selectedState);
-                        engineBairrosList.innerHTML = '';
-                        
-                        if (bairros.length === 0) {
-                            engineBairrosList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">Nenhum bairro cadastrado para esta cidade.</p>';
-                        } else {
-                            // Adicionar opção de "Selecionar Todos"
-                            engineBairrosList.innerHTML = `
-                                <label class="engine-checkbox-item" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
-                                    <input type="checkbox" id="chkSelectAllBairros">
-                                    <span style="font-weight: 600;">Selecionar Todos</span>
-                                </label>
-                            `;
-                            
-                            bairros.forEach(b => {
-                                const item = `
-                                    <label class="engine-checkbox-item">
-                                        <input type="checkbox" class="chk-engine-bairro" value="${b.bairro}">
-                                        <span>${b.bairro} <span style="opacity:0.5; font-size: 0.75rem;">(${b.genero || 'N'})</span></span>
-                                    </label>
-                                `;
-                                engineBairrosList.insertAdjacentHTML('beforeend', item);
-                            });
-
-                            // Lógica do Selecionar Todos
-                            const chkSelectAll = document.getElementById('chkSelectAllBairros');
-                            const chkBairros = document.querySelectorAll('.chk-engine-bairro');
-                            
-                            chkSelectAll.addEventListener('change', (e) => {
-                                const isChecked = e.target.checked;
-                                chkBairros.forEach(cb => cb.checked = isChecked);
-                            });
-
-                            chkBairros.forEach(cb => {
-                                cb.addEventListener('change', () => {
-                                    const allChecked = document.querySelectorAll('.chk-engine-bairro:checked').length === chkBairros.length;
-                                    chkSelectAll.checked = allChecked;
-                                });
-                            });
-                        }
-                    } catch (err) {
-                        engineBairrosList.innerHTML = '<p style="color: red; font-size: 0.85rem; padding: 0.5rem;">Erro ao carregar bairros.</p>';
-                    }
-                } else {
-                    engineBairrosList.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.85rem; padding: 0.5rem;">Selecione uma cidade para carregar os bairros...</p>';
-                }
-            });
-        }
-        
-        // Atualiza o status atual do backend
-        await updateEngineUIStatus();
-
-    } catch (e) {
-        console.error('Erro ao carregar dados do Engine:', e);
-        engineSelectActivity.innerHTML = '<option value="">Erro ao carregar</option>';
-        engineSelectState.innerHTML = '<option value="">Erro ao carregar</option>';
-    }
-}
-
-// Atualizar UI com base no Status atual
-async function updateEngineUIStatus() {
-    try {
-        const status = await window.api.getEngineStatus();
-        
-        if (status.status === 'searching') {
-            engineCurrentStatus.textContent = 'Buscando';
-            engineCurrentStatus.className = 'status-badge status-operational';
-            isEngineRunning = true;
-            isEnginePaused = false;
-        } else if (status.status === 'paused') {
-            engineCurrentStatus.textContent = 'Pausado';
-            engineCurrentStatus.className = 'status-badge status-warning';
-            isEngineRunning = true;
-            isEnginePaused = true;
-        } else {
-            engineCurrentStatus.textContent = 'Parado';
-            engineCurrentStatus.className = 'status-badge status-closed';
-            isEngineRunning = false;
-            isEnginePaused = false;
-        }
-        
-        if (status.total > 0) {
-            engineProgressText.textContent = `${status.completed} / ${status.total}`;
-            const pct = Math.floor((status.completed / status.total) * 100);
-            engineProgressBar.style.width = `${pct}%`;
-        } else {
-            engineProgressText.textContent = `0 / 0`;
-            engineProgressBar.style.width = `0%`;
-        }
-        
-        updateEngineButtons();
-        
-        // Se houver logs no status, renderiza
-        if (status.logs && status.logs.length > 0) {
-            engineConsole.innerHTML = '';
-            status.logs.forEach(log => {
-                const div = document.createElement('div');
-                div.className = `log-entry log-${log.type}`;
-                div.textContent = `[${log.time}] ${log.message}`;
-                engineConsole.appendChild(div);
-            });
-            engineConsole.scrollTop = engineConsole.scrollHeight;
-        }
-    } catch (e) {
-        console.error('Erro ao obter status:', e);
-    }
-}
-
-function updateEngineButtons() {
-    if (!isEngineRunning) {
-        btnEngineStart.disabled = false;
-        btnEngineStart.textContent = '▶ Iniciar Varredura';
-        btnEnginePause.disabled = true;
-        btnEngineStop.disabled = true;
-    } else {
-        btnEngineStart.disabled = true;
-        btnEngineStop.disabled = false;
-        btnEnginePause.disabled = false;
-        
-        if (isEnginePaused) {
-            btnEnginePause.textContent = '▶ Retomar';
-        } else {
-            btnEnginePause.textContent = '⏸ Pausar';
-        }
-    }
-}
-
-// Ações dos Botões
 if (btnEngineStart) {
     btnEngineStart.addEventListener('click', async () => {
-        const selectedActivity = engineSelectActivity.value;
-        const selectedState = engineSelectState.value;
-        const selectedCity = engineSelectCity.value;
-        const selectedBairros = Array.from(document.querySelectorAll('.chk-engine-bairro:checked')).map(cb => cb.value);
-        
-        if (!selectedActivity || !selectedState || !selectedCity) {
-            alert('Por favor, selecione a atividade, o estado e a cidade.');
+        const activity = engineSelectActivity.value;
+        const state = engineSelectState.value;
+        const city = engineSelectCity.value;
+
+        if (!activity) {
+            alert('Selecione uma atividade para iniciar a busca.');
+            return;
+        }
+        if (!state) {
+            alert('Selecione um estado para iniciar a busca.');
             return;
         }
 
-        if (selectedBairros.length === 0) {
-            if (!confirm('Nenhum bairro foi selecionado. Deseja realizar a busca apenas na cidade (sem focar em bairros)?')) {
+        const selectedBairros = [];
+        document.querySelectorAll('.chk-bairro-engine:checked').forEach(c => selectedBairros.push(c.value));
+
+        const queries = [];
+
+        if (city && selectedBairros.length > 0) {
+            selectedBairros.forEach(b => {
+                queries.push({ term: activity, state, city, neighborhood: b });
+            });
+        } else if (city) {
+            queries.push({ term: activity, state, city, neighborhood: null });
+        } else {
+            const cities = await window.api.getCities();
+            const filteredCities = cities.filter(c => c.estado === state);
+            if (filteredCities.length === 0) {
+                alert('Nenhuma cidade cadastrada para este estado.');
                 return;
             }
-        }
-        
-        const queries = [];
-        if (selectedBairros.length > 0) {
-            selectedBairros.forEach(bairro => {
-                queries.push({
-                    term: selectedActivity,
-                    city: selectedCity,
-                    state: selectedState,
-                    neighborhood: bairro
-                });
+            filteredCities.forEach(c => {
+                queries.push({ term: activity, state: c.estado, city: c.municipio, neighborhood: null });
             });
+        }
+
+        const config = {
+            queries,
+            delayBetweenPlaces: 2,
+            delayBetweenQueries: 4
+        };
+
+        const res = await window.api.startEngine(config);
+        if (res.success) {
+            isEngineRunning = true;
+            isEnginePaused = false;
+            updateEngineButtons();
+            addEngineLog('Motor de busca iniciado com sucesso!', 'system');
         } else {
-            queries.push({
-                term: selectedActivity,
-                city: selectedCity,
-                state: selectedState,
-                neighborhood: null
-            });
-        }
-        
-        engineConsole.innerHTML = ''; // Limpa logs na nova busca
-        addEngineLog(`Iniciando varredura para "${selectedActivity}" em ${selectedCity} - ${selectedState} (${selectedBairros.length > 0 ? selectedBairros.length + ' bairros' : 'cidade inteira'})...`, 'info');
-        
-        try {
-            const res = await window.api.startEngine({
-                queries: queries
-            });
-            
-            if (res.success) {
-                isEngineRunning = true;
-                isEnginePaused = false;
-                updateEngineButtons();
-            } else {
-                addEngineLog(`Erro ao iniciar: ${res.error}`, 'error');
-                alert(res.error);
-            }
-        } catch (e) {
-            addEngineLog(`Erro interno: ${e.message}`, 'error');
+            alert('Erro ao iniciar motor: ' + res.error);
         }
     });
 }
@@ -1085,75 +992,99 @@ if (btnEngineStart) {
 if (btnEnginePause) {
     btnEnginePause.addEventListener('click', async () => {
         if (isEnginePaused) {
-            addEngineLog('Retomando varredura...', 'info');
-            await window.api.resumeEngine();
-            isEnginePaused = false;
+            const res = await window.api.resumeEngine();
+            if (res.success) {
+                isEnginePaused = false;
+                updateEngineButtons();
+                addEngineLog('Motor de busca retomado.', 'system');
+            }
         } else {
-            addEngineLog('Pausando varredura...', 'warning');
-            await window.api.pauseEngine();
-            isEnginePaused = true;
+            const res = await window.api.pauseEngine();
+            if (res.success) {
+                isEnginePaused = true;
+                updateEngineButtons();
+                addEngineLog('Motor de busca pausado.', 'system');
+            }
         }
-        updateEngineButtons();
-        await updateEngineUIStatus();
     });
 }
 
 if (btnEngineStop) {
     btnEngineStop.addEventListener('click', async () => {
-        if (confirm('Deseja realmente parar a varredura atual?')) {
-            addEngineLog('Parando motor de busca...', 'warning');
-            await window.api.stopEngine();
-            isEngineRunning = false;
-            isEnginePaused = false;
-            updateEngineButtons();
-            await updateEngineUIStatus();
+        if (confirm('Deseja realmente parar o motor de busca?')) {
+            const res = await window.api.stopEngine();
+            if (res.success) {
+                isEngineRunning = false;
+                isEnginePaused = false;
+                updateEngineButtons();
+                addEngineLog('Motor de busca parado pelo usuário.', 'warning');
+            }
         }
     });
 }
 
+function updateEngineButtons() {
+    if (!btnEngineStart) return;
 
-// Listeners de Eventos IPC
+    if (isEngineRunning) {
+        btnEngineStart.disabled = true;
+        btnEnginePause.disabled = false;
+        btnEngineStop.disabled = false;
+        btnEnginePause.textContent = isEnginePaused ? '▶ Retomar' : '⏸ Pausar';
+        engineCurrentStatus.textContent = isEnginePaused ? 'Pausado' : 'Buscando...';
+        engineCurrentStatus.className = isEnginePaused ? 'status-badge status-other' : 'status-badge status-operational';
+    } else {
+        btnEngineStart.disabled = false;
+        btnEnginePause.disabled = true;
+        btnEngineStop.disabled = true;
+        btnEnginePause.textContent = '⏸ Pausar';
+        engineCurrentStatus.textContent = 'Parado';
+        engineCurrentStatus.className = 'status-badge status-closed';
+    }
+}
+
+function updateEngineUIFromStatus(data) {
+    if (!data) return;
+    isEngineRunning = data.status === 'searching' || data.status === 'paused';
+    isEnginePaused = data.status === 'paused';
+
+    updateEngineButtons();
+
+    if (data.totalPending > 0) {
+        const pct = Math.round((data.processedCount / data.totalPending) * 100);
+        engineProgressText.textContent = `${data.processedCount} / ${data.totalPending} (${pct}%)`;
+        engineProgressBar.style.width = `${pct}%`;
+    } else {
+        engineProgressText.textContent = '0 / 0';
+        engineProgressBar.style.width = '0%';
+    }
+
+    if (data.logs && data.logs.length > 0 && engineConsole.children.length <= 1) {
+        engineConsole.innerHTML = '';
+        data.logs.forEach(l => addEngineLog(l.message, l.type));
+    }
+}
+
 window.api.onEngineProgress((data) => {
-    // Atualiza status
     if (data.status) {
-        if (data.status === 'searching') {
-            engineCurrentStatus.textContent = 'Buscando';
-            engineCurrentStatus.className = 'status-badge status-operational';
-            isEngineRunning = true;
-            isEnginePaused = false;
-        } else if (data.status === 'paused') {
-            engineCurrentStatus.textContent = 'Pausado';
-            engineCurrentStatus.className = 'status-badge status-warning';
-            isEngineRunning = true;
-            isEnginePaused = true;
-        } else if (data.status === 'idle') {
-            engineCurrentStatus.textContent = 'Parado';
-            engineCurrentStatus.className = 'status-badge status-closed';
-            isEngineRunning = false;
-            isEnginePaused = false;
-        }
+        isEngineRunning = data.status === 'searching' || data.status === 'paused';
+        isEnginePaused = data.status === 'paused';
         updateEngineButtons();
     }
-    
-    // Atualiza progresso
-    if (data.total !== undefined) {
-        engineProgressText.textContent = `${data.completed} / ${data.total}`;
-        if (data.total > 0) {
-            const pct = Math.floor((data.completed / data.total) * 100);
-            engineProgressBar.style.width = `${pct}%`;
-        } else {
-            engineProgressBar.style.width = `0%`;
-        }
+
+    if (data.totalPending > 0) {
+        const pct = Math.round((data.processedCount / data.totalPending) * 100);
+        engineProgressText.textContent = `${data.processedCount} / ${data.totalPending} (${pct}%)`;
+        engineProgressBar.style.width = `${pct}%`;
     }
-    
-    // Adiciona log
-    if (data.log) {
-        addEngineLog(data.log.message, data.log.type);
+
+    if (data.newLog) {
+        addEngineLog(data.newLog.message, data.newLog.type);
     }
 });
 
 window.api.onEngineFinished((data) => {
-    addEngineLog(`Varredura concluída! Locais salvos nesta sessão: ${data.placesSaved}`, 'success');
+    addEngineLog(`Varredura concluída!`, 'success');
     engineCurrentStatus.textContent = 'Concluído';
     engineCurrentStatus.className = 'status-badge status-operational';
     engineProgressText.textContent = `100%`;
@@ -1164,20 +1095,22 @@ window.api.onEngineFinished((data) => {
     updateEngineButtons();
 });
 
-
-
 // --- INICIALIZAÇÃO DA APLICAÇÃO ---
 async function init() {
     const overlay = document.getElementById('loginOverlay');
-    const btnLogout = document.getElementById('btnLogout');
     const usersTabBtn = document.getElementById('usersTabBtn');
     
-    // Tenta validar a sessão
     try {
         const res = await window.api.checkSession();
         const user = res.user;
-        // Sessão válida
+        
         overlay.classList.add('hidden');
+        
+        // Salva dados no localStorage
+        localStorage.setItem('user', JSON.stringify(user));
+        if (user.current_company_id) {
+            localStorage.setItem('current_company_id', user.current_company_id);
+        }
         
         // Atualizar menu de usuário
         const btnUserMenu = document.getElementById('btnUserMenu');
@@ -1191,23 +1124,384 @@ async function init() {
             dropdownUserName.textContent = user.name || 'Usuário';
             dropdownUserEmail.textContent = user.email;
         }
+
+        // Atualizar Badge de Empresa no Header
+        const companyBadgeContainer = document.getElementById('companyBadgeContainer');
+        const headerCompanyName = document.getElementById('headerCompanyName');
+        if (companyBadgeContainer && headerCompanyName) {
+            companyBadgeContainer.classList.remove('hidden');
+            headerCompanyName.textContent = user.company_name || 'SEO Company';
+        }
         
-        // Se for admin, exibe a aba de usuários e as opções no dropdown
-        if (user.can_create_users) {
+        // Se for admin/master, exibe opções adicionais
+        const isMaster = !!user.is_master;
+        if (user.can_create_users || isMaster) {
             if (usersTabBtn) usersTabBtn.classList.remove('hidden');
             const liNewUser = document.getElementById('liNewUser');
             const liAllUsers = document.getElementById('liAllUsers');
             if (liNewUser) liNewUser.classList.remove('hidden');
             if (liAllUsers) liAllUsers.classList.remove('hidden');
         }
+
+        // Exibe opções exclusivas do usuário Master no dropdown
+        if (isMaster) {
+            const liSwitchCompany = document.getElementById('liSwitchCompany');
+            const liNewCompany = document.getElementById('liNewCompany');
+            const liAllCompanies = document.getElementById('liAllCompanies');
+            if (liSwitchCompany) liSwitchCompany.classList.remove('hidden');
+            if (liNewCompany) liNewCompany.classList.remove('hidden');
+            if (liAllCompanies) liAllCompanies.classList.remove('hidden');
+
+            const thUserCompany = document.getElementById('thUserCompany');
+            if (thUserCompany) thUserCompany.classList.remove('hidden');
+
+            const userCompanyGroup = document.getElementById('userCompanyGroup');
+            if (userCompanyGroup) userCompanyGroup.classList.remove('hidden');
+
+            // Carrega empresas no select do formulário de usuário
+            loadCompaniesInUserSelect(res.companies || []);
+        }
         
         await reloadActivitiesFilter();
         await loadPlaces(true);
     } catch (error) {
-        // Sessão inválida ou não logado
         overlay.classList.remove('hidden');
     }
 }
+
+async function loadCompaniesInUserSelect(companiesList = null) {
+    const userCompanySelect = document.getElementById('userCompany');
+    if (!userCompanySelect) return;
+
+    try {
+        const companies = companiesList || (await window.api.getCompanies()).data || [];
+        userCompanySelect.innerHTML = '<option value="">Selecione uma empresa...</option>';
+        companies.forEach(c => {
+            userCompanySelect.insertAdjacentHTML('beforeend', `<option value="${c._id}">${c.name}</option>`);
+        });
+    } catch (e) {
+        console.error('Erro ao carregar lista de empresas para select:', e);
+    }
+}
+
+// --- GESTÃO DE EMPRESAS (MULTI-TENANT / MASTER) ---
+
+const btnSelectCompany = document.getElementById('btnSelectCompany');
+const btnDropdownSwitchCompany = document.getElementById('btnDropdownSwitchCompany');
+const btnDropdownNewCompany = document.getElementById('btnDropdownNewCompany');
+const btnDropdownAllCompanies = document.getElementById('btnDropdownAllCompanies');
+
+if (btnSelectCompany) {
+    btnSelectCompany.addEventListener('click', () => openSwitchCompanyModal());
+}
+if (btnDropdownSwitchCompany) {
+    btnDropdownSwitchCompany.addEventListener('click', () => {
+        const userDropdown = document.getElementById('userDropdown');
+        if (userDropdown) userDropdown.classList.add('hidden');
+        openSwitchCompanyModal();
+    });
+}
+if (btnDropdownNewCompany) {
+    btnDropdownNewCompany.addEventListener('click', () => {
+        const userDropdown = document.getElementById('userDropdown');
+        if (userDropdown) userDropdown.classList.add('hidden');
+        openCompanyModal();
+    });
+}
+if (btnDropdownAllCompanies) {
+    btnDropdownAllCompanies.addEventListener('click', () => {
+        const userDropdown = document.getElementById('userDropdown');
+        if (userDropdown) userDropdown.classList.add('hidden');
+        openCompaniesListModal();
+    });
+}
+
+// Modal Trocar de Empresa Ativa
+const switchCompanyModal = document.getElementById('switchCompanyModal');
+const closeSwitchCompanyModal = document.getElementById('closeSwitchCompanyModal');
+const btnSwitchCompanyCancel = document.getElementById('btnSwitchCompanyCancel');
+const switchCompanyList = document.getElementById('switchCompanyList');
+const searchCompanySwitchInput = document.getElementById('searchCompanySwitchInput');
+
+function hideSwitchCompanyModal() {
+    if (switchCompanyModal) {
+        switchCompanyModal.classList.remove('show');
+        setTimeout(() => { switchCompanyModal.style.display = 'none'; }, 300);
+    }
+}
+
+async function openSwitchCompanyModal() {
+    if (!switchCompanyModal || !switchCompanyList) return;
+    
+    switchCompanyList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 1rem;">Carregando empresas...</p>';
+    switchCompanyModal.style.display = 'flex';
+    setTimeout(() => { switchCompanyModal.classList.add('show'); }, 10);
+
+    try {
+        const res = await window.api.getCompanies();
+        const companies = res.data || [];
+        renderSwitchCompanyList(companies);
+
+        if (searchCompanySwitchInput) {
+            searchCompanySwitchInput.value = '';
+            searchCompanySwitchInput.oninput = () => {
+                const term = searchCompanySwitchInput.value.trim().toLowerCase();
+                const filtered = companies.filter(c => c.name.toLowerCase().includes(term));
+                renderSwitchCompanyList(filtered);
+            };
+        }
+    } catch (e) {
+        switchCompanyList.innerHTML = '<p style="color: red; text-align: center; padding: 1rem;">Erro ao carregar lista de empresas.</p>';
+    }
+}
+
+function renderSwitchCompanyList(companies) {
+    if (!switchCompanyList) return;
+    const currentCompanyId = localStorage.getItem('current_company_id');
+    switchCompanyList.innerHTML = '';
+
+    if (companies.length === 0) {
+        switchCompanyList.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 1rem;">Nenhuma empresa encontrada.</p>';
+        return;
+    }
+
+    companies.forEach(c => {
+        const isActive = c._id === currentCompanyId;
+        const activeClass = isActive ? 'active' : '';
+        const badgeTag = isActive ? '<span class="badge-active-tag">Ativa</span>' : '';
+
+        const item = `
+            <div class="company-select-item ${activeClass}" data-id="${c._id}" data-name="${c.name}">
+                <span class="company-select-name">🏢 ${c.name}</span>
+                ${badgeTag}
+            </div>
+        `;
+        switchCompanyList.insertAdjacentHTML('beforeend', item);
+    });
+
+    switchCompanyList.querySelectorAll('.company-select-item').forEach(el => {
+        el.addEventListener('click', async () => {
+            const companyId = el.getAttribute('data-id');
+            const companyName = el.getAttribute('data-name');
+
+            if (companyId === currentCompanyId) {
+                hideSwitchCompanyModal();
+                return;
+            }
+
+            try {
+                const res = await window.api.switchCompany(companyId);
+                if (res.success) {
+                    if (res.token) localStorage.setItem('token', res.token);
+                    localStorage.setItem('current_company_id', companyId);
+                    
+                    const headerCompanyName = document.getElementById('headerCompanyName');
+                    if (headerCompanyName) headerCompanyName.textContent = companyName;
+
+                    hideSwitchCompanyModal();
+                    reloadCurrentTab();
+                } else {
+                    alert('Erro ao trocar de empresa: ' + res.error);
+                }
+            } catch (err) {
+                alert('Erro ao trocar de empresa.');
+            }
+        });
+    });
+}
+
+if (closeSwitchCompanyModal) closeSwitchCompanyModal.addEventListener('click', hideSwitchCompanyModal);
+if (btnSwitchCompanyCancel) btnSwitchCompanyCancel.addEventListener('click', hideSwitchCompanyModal);
+
+// Modal Cadastrar / Editar Empresa
+const companyModal = document.getElementById('companyModal');
+const companyModalTitle = document.getElementById('companyModalTitle');
+const closeCompanyModal = document.getElementById('closeCompanyModal');
+const btnCompanyCancel = document.getElementById('btnCompanyCancel');
+const btnCompanySave = document.getElementById('btnCompanySave');
+const formCompany = document.getElementById('formCompany');
+const companyError = document.getElementById('companyError');
+
+function hideCompanyModal() {
+    if (companyModal) {
+        companyModal.classList.remove('show');
+        setTimeout(() => { companyModal.style.display = 'none'; }, 300);
+    }
+}
+
+function openCompanyModal(id = null, currentName = '') {
+    if (!companyModal) return;
+    document.getElementById('companyId').value = id || '';
+    document.getElementById('companyName').value = currentName || '';
+    companyModalTitle.textContent = id ? 'Editar Cliente (Empresa)' : 'Novo Cliente (Empresa)';
+    if (companyError) companyError.classList.add('hidden');
+
+    companyModal.style.display = 'flex';
+    setTimeout(() => { companyModal.classList.add('show'); }, 10);
+}
+
+if (closeCompanyModal) closeCompanyModal.addEventListener('click', hideCompanyModal);
+if (btnCompanyCancel) btnCompanyCancel.addEventListener('click', hideCompanyModal);
+
+if (btnCompanySave && formCompany) {
+    btnCompanySave.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('companyId').value;
+        const name = document.getElementById('companyName').value.trim();
+
+        if (!name) {
+            companyError.textContent = 'O nome do cliente/empresa é obrigatório.';
+            companyError.classList.remove('hidden');
+            return;
+        }
+
+        btnCompanySave.disabled = true;
+        btnCompanySave.textContent = 'Salvando...';
+
+        try {
+            let res;
+            if (id) {
+                res = await window.api.updateCompany(id, name);
+            } else {
+                res = await window.api.createCompany(name);
+            }
+
+            if (res.success) {
+                hideCompanyModal();
+                const companiesListModal = document.getElementById('companiesListModal');
+                if (companiesListModal && companiesListModal.classList.contains('show')) {
+                    await loadCompaniesAdminTable();
+                }
+                loadCompaniesInUserSelect();
+            } else {
+                companyError.textContent = res.error || 'Erro ao salvar cliente.';
+                companyError.classList.remove('hidden');
+            }
+        } catch (err) {
+            companyError.textContent = err.message || 'Erro interno ao salvar cliente.';
+            companyError.classList.remove('hidden');
+        } finally {
+            btnCompanySave.disabled = false;
+            btnCompanySave.textContent = 'Salvar Cliente';
+        }
+    });
+}
+
+// Modal Gerenciar Todas as Empresas
+const companiesListModal = document.getElementById('companiesListModal');
+const closeCompaniesListModal = document.getElementById('closeCompaniesListModal');
+const btnCloseCompaniesListModal = document.getElementById('btnCloseCompaniesListModal');
+const btnOpenNewCompanyModal = document.getElementById('btnOpenNewCompanyModal');
+
+function hideCompaniesListModal() {
+    if (companiesListModal) {
+        companiesListModal.classList.remove('show');
+        setTimeout(() => { companiesListModal.style.display = 'none'; }, 300);
+    }
+}
+
+async function openCompaniesListModal() {
+    if (!companiesListModal) return;
+    companiesListModal.style.display = 'flex';
+    setTimeout(() => { companiesListModal.classList.add('show'); }, 10);
+    await loadCompaniesAdminTable();
+}
+
+async function loadCompaniesAdminTable() {
+    const tableBody = document.getElementById('companiesTableBody');
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 1.5rem;">Carregando empresas...</td></tr>';
+    
+    try {
+        const res = await window.api.getCompanies();
+        const companies = res.data || [];
+        tableBody.innerHTML = '';
+
+        if (companies.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 1.5rem;">Nenhuma empresa cadastrada.</td></tr>';
+            return;
+        }
+
+        const currentCompanyId = localStorage.getItem('current_company_id');
+
+        companies.forEach(c => {
+            const date = new Date(c.created_at).toLocaleDateString('pt-BR');
+            const isActive = c._id === currentCompanyId;
+
+            const btnSwitch = isActive ? 
+                '<span class="badge badge-active">Empresa Ativa</span>' :
+                `<button class="btn-primary btn-small btn-switch-company-row" data-id="${c._id}" data-name="${c.name}" style="width: auto; padding: 0.3rem 0.6rem; font-size: 0.75rem;">Ativar</button>`;
+
+            const btnEdit = `<button class="btn-icon btn-icon-edit btn-edit-company" data-id="${c._id}" data-name="${c.name}" title="Editar Cliente">
+                                <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4Z"/></svg>
+                             </button>`;
+
+            const btnDelete = `<button class="btn-icon btn-icon-delete btn-delete-company" data-id="${c._id}" data-name="${c.name}" title="Excluir Cliente e Dados">
+                                <svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>
+                               </button>`;
+
+            const row = `
+                <tr>
+                    <td><strong>${c.name}</strong></td>
+                    <td>${date}</td>
+                    <td>${btnSwitch} ${btnEdit} ${btnDelete}</td>
+                </tr>
+            `;
+            tableBody.insertAdjacentHTML('beforeend', row);
+        });
+
+        tableBody.querySelectorAll('.btn-switch-company-row').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-id');
+                const name = btn.getAttribute('data-name');
+                const res = await window.api.switchCompany(id);
+                if (res.success) {
+                    if (res.token) localStorage.setItem('token', res.token);
+                    localStorage.setItem('current_company_id', id);
+                    document.getElementById('headerCompanyName').textContent = name;
+                    await loadCompaniesAdminTable();
+                    reloadCurrentTab();
+                } else {
+                    alert('Erro ao ativar empresa: ' + res.error);
+                }
+            });
+        });
+
+        tableBody.querySelectorAll('.btn-edit-company').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-id');
+                const name = btn.getAttribute('data-name');
+                openCompanyModal(id, name);
+            });
+        });
+
+        tableBody.querySelectorAll('.btn-delete-company').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-id');
+                const name = btn.getAttribute('data-name');
+                if (confirm(`ATENÇÃO: Deseja realmente excluir o cliente "${name}"? Todos os locais, cidades e termos associados a este cliente serão PERMANENTEMENTE apagados.`)) {
+                    const res = await window.api.deleteCompany(id);
+                    if (res.success) {
+                        await loadCompaniesAdminTable();
+                        loadCompaniesInUserSelect();
+                        reloadCurrentTab();
+                    } else {
+                        alert('Erro ao excluir empresa: ' + res.error);
+                    }
+                }
+            });
+        });
+
+    } catch (e) {
+        console.error(e);
+        tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: red;">Erro ao carregar lista de empresas.</td></tr>';
+    }
+}
+
+if (closeCompaniesListModal) closeCompaniesListModal.addEventListener('click', hideCompaniesListModal);
+if (btnCloseCompaniesListModal) btnCloseCompaniesListModal.addEventListener('click', hideCompaniesListModal);
+if (btnOpenNewCompanyModal) btnOpenNewCompanyModal.addEventListener('click', () => openCompanyModal());
 
 // --- AUTENTICAÇÃO E LOGIN ---
 const formLogin = document.getElementById('formLogin');
@@ -1231,7 +1525,10 @@ if (formLogin) {
             if (res.token) {
                 localStorage.setItem('token', res.token);
                 localStorage.setItem('user', JSON.stringify(res.user));
-                window.location.reload(); // Recarrega para inicializar a aplicação logada
+                if (res.user.current_company_id) {
+                    localStorage.setItem('current_company_id', res.user.current_company_id);
+                }
+                window.location.reload();
             } else {
                 throw new Error(res.error || 'Falha no login');
             }
@@ -1250,6 +1547,7 @@ if (btnLogout) {
     btnLogout.addEventListener('click', () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('current_company_id');
         window.location.reload();
     });
 }
@@ -1264,7 +1562,6 @@ if (btnUserMenu && userDropdown) {
         userDropdown.classList.toggle('hidden');
     });
 
-    // Fechar ao clicar fora
     document.addEventListener('click', (e) => {
         if (!userDropdown.contains(e.target) && !btnUserMenu.contains(e.target)) {
             userDropdown.classList.add('hidden');
@@ -1332,7 +1629,6 @@ if (btnProfile && profileModal) {
             const res = await window.api.updateProfile(data);
             if (res.success) {
                 profileSuccess.style.display = 'block';
-                // Atualizar o name no localStorage e na UI
                 const user = JSON.parse(localStorage.getItem('user') || '{}');
                 user.name = name;
                 localStorage.setItem('user', JSON.stringify(user));
@@ -1399,11 +1695,13 @@ if (formUser) {
         const emailInput = document.getElementById('userEmail');
         const passwordInput = document.getElementById('userPassword');
         const canCreateInput = document.getElementById('userCanCreateUsers');
+        const userCompanySelect = document.getElementById('userCompany');
         
         const name = nameInput ? nameInput.value.trim() : '';
         const email = emailInput.value.trim();
         const password = passwordInput.value.trim();
         const can_create_users = canCreateInput.checked;
+        const company_id = userCompanySelect ? userCompanySelect.value : null;
         
         if (!email || !password) return;
         
@@ -1412,7 +1710,7 @@ if (formUser) {
         btn.textContent = 'Salvando...';
         
         try {
-            const res = await window.api.createUser({ name, email, password, can_create_users });
+            const res = await window.api.createUser({ name, email, password, can_create_users, company_id });
             if (res.success) {
                 emailInput.value = '';
                 passwordInput.value = '';
@@ -1435,29 +1733,37 @@ async function loadUsersAdmin() {
     const tableBody = document.getElementById('usersTableBody');
     if (!tableBody) return;
     
-    tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 1.5rem;">Carregando usuários...</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 1.5rem;">Carregando usuários...</td></tr>';
     
     try {
         const res = await window.api.getUsers();
         const users = res.data || [];
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const isMaster = !!currentUser.is_master;
+
+        const thUserCompany = document.getElementById('thUserCompany');
+        if (thUserCompany) {
+            thUserCompany.classList.toggle('hidden', !isMaster);
+        }
+
         tableBody.innerHTML = '';
         
         if (users.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 1.5rem;">Nenhum usuário encontrado.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 1.5rem;">Nenhum usuário encontrado.</td></tr>';
             return;
         }
         
         users.forEach(user => {
             const date = new Date(user.created_at).toLocaleDateString('pt-BR');
-            const roleBadge = user.can_create_users ? 
-                '<span class="badge badge-active">Sim</span>' : 
-                '<span class="badge badge-inactive">Não</span>';
+            const roleBadge = user.is_master ? 
+                '<span class="badge badge-master">Master</span>' : 
+                (user.can_create_users ? '<span class="badge badge-active">Admin</span>' : '<span class="badge badge-inactive">Comum</span>');
             
-            // Não permite deletar a si mesmo (proteção básica front-end)
-            const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
             const isSelf = currentUser.email === user.email;
             
-            const btnEdit = `<button class="btn-icon btn-icon-edit btn-edit-user" data-id="${user._id}" data-name="${user.name||''}" data-email="${user.email}" data-admin="${user.can_create_users}" title="Editar Usuário">
+            const companyTd = isMaster ? `<td><span class="badge" style="background: rgba(255,255,255,0.08);">${user.company_name || 'N/A'}</span></td>` : '';
+
+            const btnEdit = `<button class="btn-icon btn-icon-edit btn-edit-user" data-id="${user._id}" data-name="${user.name||''}" data-email="${user.email}" data-admin="${user.can_create_users}" data-company="${user.company_id||''}" title="Editar Usuário">
                                 <svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                              </button>`;
 
@@ -1471,6 +1777,7 @@ async function loadUsersAdmin() {
                 <tr>
                     <td><strong>${user.name || 'Usuário'}</strong></td>
                     <td>${user.email}</td>
+                    ${companyTd}
                     <td>${roleBadge}</td>
                     <td>${date}</td>
                     <td>${btnEdit} ${btnDelete}</td>
@@ -1479,7 +1786,6 @@ async function loadUsersAdmin() {
             tableBody.insertAdjacentHTML('beforeend', row);
         });
         
-        // Listeners das ações
         document.querySelectorAll('.btn-delete-user').forEach(btn => {
             btn.addEventListener('click', async () => {
                 const id = btn.getAttribute('data-id');
@@ -1505,23 +1811,40 @@ async function loadUsersAdmin() {
                 const name = btn.getAttribute('data-name');
                 const email = btn.getAttribute('data-email');
                 const isAdmin = btn.getAttribute('data-admin') === 'true';
+                const companyId = btn.getAttribute('data-company');
                 
-                openUserEditModal(id, name, email, isAdmin);
+                openUserEditModal(id, name, email, isAdmin, companyId);
             });
         });
         
     } catch (err) {
         console.error(err);
-        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Erro ao obter lista de usuários.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Erro ao obter lista de usuários.</td></tr>';
     }
 }
 
-function openUserEditModal(id, currentName, currentEmail, currentAdmin) {
+async function openUserEditModal(id, currentName, currentEmail, currentAdmin, currentCompanyId) {
     const modalTitle = document.getElementById('modalTitle');
     const modalBody = document.getElementById('modalBody');
     const btnSave = document.getElementById('btnModalSave');
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const isMaster = !!currentUser.is_master;
     
     modalTitle.textContent = 'Editar Usuário';
+    
+    let companySelectHtml = '';
+    if (isMaster) {
+        const companiesRes = await window.api.getCompanies();
+        const companies = companiesRes.data || [];
+        companySelectHtml = `
+            <div class="form-group">
+                <label>Empresa / Cliente</label>
+                <select id="editUserCompany">
+                    ${companies.map(c => `<option value="${c._id}" ${c._id === currentCompanyId ? 'selected' : ''}>${c.name}</option>`).join('')}
+                </select>
+            </div>
+        `;
+    }
     
     const bodyHtml = `
         <div class="form-group">
@@ -1532,6 +1855,7 @@ function openUserEditModal(id, currentName, currentEmail, currentAdmin) {
             <label>E-mail</label>
             <input type="email" id="editUserEmail" value="${currentEmail}" placeholder="Ex: colaborador@empresa.com">
         </div>
+        ${companySelectHtml}
         <div class="form-group">
             <label>Nova Senha (Deixe em branco para não alterar)</label>
             <input type="password" id="editUserPassword" placeholder="••••••••">
@@ -1544,12 +1868,10 @@ function openUserEditModal(id, currentName, currentEmail, currentAdmin) {
     `;
     modalBody.innerHTML = bodyHtml;
     
-    // Mostra o modal reutilizando a lógica existente
     const modal = document.getElementById('editModal');
     modal.style.display = 'flex';
     setTimeout(() => { modal.classList.add('show'); }, 10);
     
-    // Define a ação de salvar (removendo event listeners anteriores usando clone)
     const newBtnSave = btnSave.cloneNode(true);
     btnSave.parentNode.replaceChild(newBtnSave, btnSave);
     
@@ -1558,6 +1880,8 @@ function openUserEditModal(id, currentName, currentEmail, currentAdmin) {
         const email = document.getElementById('editUserEmail').value.trim();
         const password = document.getElementById('editUserPassword').value.trim();
         const isAdmin = document.getElementById('editUserAdmin').checked;
+        const companySelect = document.getElementById('editUserCompany');
+        const company_id = companySelect ? companySelect.value : undefined;
         const errDiv = document.getElementById('editUserError');
         
         errDiv.classList.add('hidden');
@@ -1567,10 +1891,10 @@ function openUserEditModal(id, currentName, currentEmail, currentAdmin) {
         try {
             const data = { name, email, can_create_users: isAdmin };
             if (password) data.password = password;
+            if (company_id) data.company_id = company_id;
             
             const res = await window.api.updateUser(id, data);
             if (res.success) {
-                // Fecha modal
                 modal.classList.remove('show');
                 setTimeout(() => { modal.style.display = 'none'; }, 300);
                 await loadUsersAdmin();

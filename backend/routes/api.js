@@ -4,6 +4,7 @@ const { verifyToken } = require('../middleware/authMiddleware');
 
 // Middleware para proteger todas as rotas de api.js
 router.use(verifyToken);
+
 const { 
     getPlaces, 
     getActivities, 
@@ -28,7 +29,7 @@ const searchEngine = require('../searchEngine');
 router.post('/places', async (req, res) => {
     try {
         const filters = req.body;
-        const places = await getPlaces(filters);
+        const places = await getPlaces(filters, req.company_id);
         res.json(places);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -36,7 +37,7 @@ router.post('/places', async (req, res) => {
 router.post('/places/update', async (req, res) => {
     try {
         const { placeId } = req.body;
-        const result = await updatePlaceFromGoogle(placeId);
+        const result = await updatePlaceFromGoogle(placeId, req.company_id);
         res.json(result);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -44,9 +45,9 @@ router.post('/places/update', async (req, res) => {
 router.post('/places/update-status', async (req, res) => {
     try {
         const { placeId, status } = req.body;
-        const result = await updateImportedStatus(placeId, status);
+        const result = await updateImportedStatus(placeId, status, req.company_id);
         if (status === true && result.success) {
-            addToCRMQueue(placeId);
+            addToCRMQueue(placeId, req.company_id);
         }
         res.json(result);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -54,47 +55,47 @@ router.post('/places/update-status', async (req, res) => {
 
 // --- CITIES ---
 router.get('/cities', async (req, res) => {
-    try { res.json(await getCities()); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await getCities(req.company_id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/cities', async (req, res) => {
-    try { res.json(await addCity(req.body)); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await addCity(req.body, req.company_id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.put('/cities/:id', async (req, res) => {
-    try { res.json(await updateCity(req.params.id, req.body)); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await updateCity(req.params.id, req.body, req.company_id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.delete('/cities/:id', async (req, res) => {
-    try { res.json(await deleteCity(req.params.id)); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await deleteCity(req.params.id, req.company_id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // --- NEIGHBORHOODS ---
 router.post('/neighborhoods/search', async (req, res) => {
     try {
         const { municipio, estado } = req.body;
-        res.json(await getNeighborhoodsByCity(municipio, estado));
+        res.json(await getNeighborhoodsByCity(municipio, estado, req.company_id));
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/neighborhoods', async (req, res) => {
-    try { res.json(await addNeighborhood(req.body)); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await addNeighborhood(req.body, req.company_id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.put('/neighborhoods/:id', async (req, res) => {
-    try { res.json(await updateNeighborhood(req.params.id, req.body)); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await updateNeighborhood(req.params.id, req.body, req.company_id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.delete('/neighborhoods/:id', async (req, res) => {
-    try { res.json(await deleteNeighborhood(req.params.id)); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await deleteNeighborhood(req.params.id, req.company_id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // --- ACTIVITIES ---
 router.get('/activities', async (req, res) => {
-    try { res.json(await getActivities()); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await getActivities(req.company_id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.post('/activities', async (req, res) => {
-    try { res.json(await addActivity(req.body)); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await addActivity(req.body, req.company_id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.put('/activities/:id', async (req, res) => {
-    try { res.json(await updateActivity(req.params.id, req.body)); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await updateActivity(req.params.id, req.body, req.company_id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 router.delete('/activities/:id', async (req, res) => {
-    try { res.json(await deleteActivity(req.params.id)); } catch (e) { res.status(500).json({ error: e.message }); }
+    try { res.json(await deleteActivity(req.params.id, req.company_id)); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // --- AI GENERATOR ---
@@ -160,7 +161,7 @@ router.post('/ai/generate-neighborhoods', async (req, res) => {
                     genero: item.genero || 'N',
                     municipio,
                     estado
-                });
+                }, req.company_id);
                 if (result.success) insertedCount++;
             }
         }
@@ -176,9 +177,8 @@ router.post('/ai/generate-neighborhoods', async (req, res) => {
 router.post('/engine/start', async (req, res) => {
     try {
         const config = req.body;
-        // Obter io do request object
         const io = req.app.get('io');
-        const result = await searchEngine.start(config, io);
+        const result = await searchEngine.start(config, io, req.company_id);
         res.json(result);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
