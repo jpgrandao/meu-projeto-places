@@ -18,8 +18,8 @@ const {
     updateActivity,
     deleteActivity
 } = require('../database/mongodb');
-const { addToCRMQueue } = require('./crmQueue');
-const searchEngine = require('./searchEngine');
+const { addToCRMQueue } = require('../backend/crmQueue');
+const searchEngine = require('../backend/searchEngine');
 
 function createWindow() {
     const win = new BrowserWindow({

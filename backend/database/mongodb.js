@@ -426,17 +426,6 @@ async function getUserByEmail(email) {
     }
 }
 
-async function getUserById(id) {
-    try {
-        const database = await getDb();
-        const collection = database.collection('users');
-        return await collection.findOne({ _id: new ObjectId(id) });
-    } catch (error) {
-        console.error('Erro ao buscar usuário por ID:', error);
-        return null;
-    }
-}
-
 async function getUsers() {
     try {
         const database = await getDb();

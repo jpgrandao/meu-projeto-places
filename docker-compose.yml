@@ -14,13 +14,17 @@ services:
       - seo-net-desenv
 
     environment:
-      # URL de conexão com o MongoDB interno do Swarm
-      # Substitua "meu_projeto_places" pelo nome do seu banco de dados
       - MONGO_URI=mongodb://admin_jp:T00jcpaYc3FVJWgea1dX1Tu@mongo:27017/meu_projeto_places?authSource=admin
       - PORT=3000
-      # Adicione aqui suas outras chaves como OPENAI_API_KEY e GOOGLE_MAPS_API_KEY
-      # - OPENAI_API_KEY=sk-...
-      # - GOOGLE_MAPS_API_KEY=AIza...
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CRM_CLIENT_TOKEN=${CRM_CLIENT_TOKEN}
+      - CRM_CHANNEL_TYPE=${CRM_CHANNEL_TYPE}
+      - CRM_CHANNEL_ID=${CRM_CHANNEL_ID}
+      - CRM_DEPARTMENT_UUID=${CRM_DEPARTMENT_UUID}
+      - CRM_AGENT_UUID=${CRM_AGENT_UUID}
+      - CRM_TAG_UUID=${CRM_TAG_UUID}
+      - JWT_SECRET=${JWT_SECRET}
 
     deploy:
       mode: replicated
