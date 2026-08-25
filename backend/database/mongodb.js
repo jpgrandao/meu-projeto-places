@@ -49,7 +49,7 @@ async function getCompanyById(id) {
     }
 }
 
-async function createCompany(name, createdBy = null) {
+async function createCompany(name, createdBy = null, options = {}) {
     try {
         if (!name || !name.trim()) {
             return { success: false, error: 'Nome da empresa é obrigatório.' };
@@ -65,6 +65,17 @@ async function createCompany(name, createdBy = null) {
         const doc = {
             name: name.trim(),
             active: true,
+            allow_excel_export: options.allow_excel_export !== undefined ? !!options.allow_excel_export : true,
+            crm_enabled: options.crm_enabled !== undefined ? !!options.crm_enabled : false,
+            crm_provider: options.crm_provider || 'mz_partners',
+            crm_config: options.crm_config || {
+                client_token: '',
+                channel_id: '',
+                channel_type: 'WHATSAPP',
+                department_uuid: '',
+                agent_uuid: '',
+                tag_uuid: ''
+            },
             created_at: new Date(),
             created_by: toObjectId(createdBy)
         };
@@ -86,7 +97,11 @@ async function updateCompany(id, updates) {
         const collection = database.collection('companies');
 
         const setObj = { updated_at: new Date() };
-        if (updates.name) setObj.name = updates.name.trim();
+        if (updates.name !== undefined) setObj.name = updates.name.trim();
+        if (updates.allow_excel_export !== undefined) setObj.allow_excel_export = !!updates.allow_excel_export;
+        if (updates.crm_enabled !== undefined) setObj.crm_enabled = !!updates.crm_enabled;
+        if (updates.crm_provider !== undefined) setObj.crm_provider = updates.crm_provider;
+        if (updates.crm_config !== undefined) setObj.crm_config = updates.crm_config;
 
         await collection.updateOne({ _id: objId }, { $set: setObj });
         return { success: true };
@@ -103,19 +118,122 @@ async function deleteCompany(id) {
 
         const database = await getDb();
         
-        // Exclui os dados vinculados a essa empresa
         await database.collection('places').deleteMany({ company_id: objId });
         await database.collection('activities').deleteMany({ company_id: objId });
         await database.collection('cities').deleteMany({ company_id: objId });
         await database.collection('neighborhoods').deleteMany({ company_id: objId });
+        await database.collection('tags').deleteMany({ company_id: objId });
+        await database.collection('export_jobs').deleteMany({ company_id: objId });
         await database.collection('users').deleteMany({ company_id: objId, is_master: { $ne: true } });
         
-        // Remove a empresa
         await database.collection('companies').deleteOne({ _id: objId });
 
         return { success: true };
     } catch (error) {
         console.error('Erro ao excluir empresa:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// --- TAGS ---
+
+async function getTags(companyId) {
+    try {
+        const database = await getDb();
+        const cId = toObjectId(companyId);
+        if (!cId) return [];
+        return await database.collection('tags').find({ company_id: cId }).sort({ name: 1 }).toArray();
+    } catch (error) {
+        console.error('Erro ao buscar tags:', error);
+        return [];
+    }
+}
+
+async function createTag(tagDoc, companyId) {
+    try {
+        const cId = toObjectId(companyId);
+        if (!cId) return { success: false, error: 'Empresa não informada.' };
+        if (!tagDoc.name || !tagDoc.name.trim()) return { success: false, error: 'Nome da tag é obrigatório.' };
+
+        const database = await getDb();
+        const collection = database.collection('tags');
+
+        const existing = await collection.findOne({ company_id: cId, name: { $regex: `^${tagDoc.name.trim()}$`, $options: 'i' } });
+        if (existing) {
+            return { success: false, error: 'Já existe uma tag com este nome para sua empresa.' };
+        }
+
+        const doc = {
+            company_id: cId,
+            name: tagDoc.name.trim(),
+            color: tagDoc.color || '#3b82f6',
+            created_at: new Date()
+        };
+
+        const result = await collection.insertOne(doc);
+        return { success: true, id: result.insertedId, tag: doc };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+async function updateTag(id, updates, companyId) {
+    try {
+        const cId = toObjectId(companyId);
+        const objId = toObjectId(id);
+        if (!cId || !objId) return { success: false, error: 'IDs inválidos.' };
+
+        const database = await getDb();
+        const setObj = { updated_at: new Date() };
+        if (updates.name) setObj.name = updates.name.trim();
+        if (updates.color) setObj.color = updates.color;
+
+        await database.collection('tags').updateOne({ _id: objId, company_id: cId }, { $set: setObj });
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+async function deleteTag(id, companyId) {
+    try {
+        const cId = toObjectId(companyId);
+        const objId = toObjectId(id);
+        if (!cId || !objId) return { success: false, error: 'IDs inválidos.' };
+
+        const database = await getDb();
+        await database.collection('tags').deleteOne({ _id: objId, company_id: cId });
+        
+        // Remove essa tag dos locais
+        await database.collection('places').updateMany(
+            { company_id: cId },
+            { $pull: { tags: objId } }
+        );
+
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+async function bulkApplyTags(placeIds = [], tagIds = [], action = 'add', companyId) {
+    try {
+        const cId = toObjectId(companyId);
+        if (!cId) return { success: false, error: 'Empresa não definida.' };
+        if (!Array.isArray(placeIds) || placeIds.length === 0) return { success: false, error: 'Nenhum local selecionado.' };
+        if (!Array.isArray(tagIds) || tagIds.length === 0) return { success: false, error: 'Nenhuma tag selecionada.' };
+
+        const database = await getDb();
+        const tagObjectIds = tagIds.map(id => toObjectId(id)).filter(Boolean);
+
+        const filter = { place_id: { $in: placeIds }, company_id: cId };
+        const update = action === 'add' 
+            ? { $addToSet: { tags: { $each: tagObjectIds } } }
+            : { $pullAll: { tags: tagObjectIds } };
+
+        const result = await database.collection('places').updateMany(filter, update);
+        return { success: true, modifiedCount: result.modifiedCount };
+    } catch (error) {
         return { success: false, error: error.message };
     }
 }
@@ -129,6 +247,11 @@ async function getPlaces(filters = {}, companyId) {
     const cId = toObjectId(companyId);
     const query = cId ? { company_id: cId } : {};
     
+    // Seleção de IDs específicos (em lote)
+    if (filters.ids && Array.isArray(filters.ids) && filters.ids.length > 0) {
+        query.place_id = { $in: filters.ids };
+    }
+
     if (filters.nome) {
         query.nome = { $regex: filters.nome, $options: 'i' };
     }
@@ -163,6 +286,29 @@ async function getPlaces(filters = {}, companyId) {
     }
     if (filters.businessStatus) {
         query.businessStatus = filters.businessStatus;
+    }
+
+    // Filtros de Status de CRM e Excel
+    if (filters.crmStatus === 'exported') {
+        query.$or = [{ importado: true }, { crm_exported: true }];
+    } else if (filters.crmStatus === 'not_exported') {
+        query.importado = { $ne: true };
+        query.crm_exported = { $ne: true };
+    }
+
+    if (filters.excelStatus === 'exported') {
+        query.excel_exported = true;
+    } else if (filters.excelStatus === 'not_exported') {
+        query.excel_exported = { $ne: true };
+    }
+
+    // Filtro por Tags
+    if (filters.tags && Array.isArray(filters.tags) && filters.tags.length > 0) {
+        const tagObjectIds = filters.tags.map(t => toObjectId(t)).filter(Boolean);
+        query.tags = { $in: tagObjectIds };
+    } else if (filters.tags && typeof filters.tags === 'string' && filters.tags.trim()) {
+        const tagObj = toObjectId(filters.tags.trim());
+        if (tagObj) query.tags = tagObj;
     }
 
     const page = filters.page ? parseInt(filters.page) : 1;
@@ -216,7 +362,11 @@ async function savePlaceDirectly(placeDoc, companyId) {
                 updated_at: new Date()
             },
             $setOnInsert: {
-                created_at: new Date()
+                created_at: new Date(),
+                excel_exported: false,
+                crm_exported: false,
+                importado: false,
+                tags: []
             }
         };
         
@@ -287,6 +437,8 @@ async function updateImportedStatus(placeId, isImported, companyId) {
         const updateDoc = {
             $set: {
                 importado: isImported,
+                crm_exported: isImported,
+                crm_exported_at: isImported ? new Date() : null,
                 updated_at: new Date()
             }
         };
@@ -296,6 +448,94 @@ async function updateImportedStatus(placeId, isImported, companyId) {
     } catch (error) {
         console.error('Erro ao atualizar status de importação:', error);
         return { success: false, error: error.message };
+    }
+}
+
+async function markPlacesAsExcelExported(placeIds = [], companyId) {
+    try {
+        const database = await getDb();
+        const cId = toObjectId(companyId);
+        if (!cId || !Array.isArray(placeIds) || placeIds.length === 0) return { success: false };
+
+        await database.collection('places').updateMany(
+            { place_id: { $in: placeIds }, company_id: cId },
+            { $set: { excel_exported: true, excel_exported_at: new Date() } }
+        );
+        return { success: true };
+    } catch (error) {
+        console.error('Erro ao marcar locais como exportados para Excel:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// --- EXPORT JOBS (FILA DE EXPORTAÇÃO E COOLDOWN) ---
+
+async function createExportJob(jobDoc) {
+    try {
+        const database = await getDb();
+        const doc = {
+            company_id: toObjectId(jobDoc.company_id),
+            type: jobDoc.type, // 'excel' | 'crm'
+            status: 'pending', // 'pending' | 'processing' | 'completed' | 'failed'
+            total_items: jobDoc.total_items || 0,
+            processed_items: 0,
+            filters: jobDoc.filters || {},
+            place_ids: jobDoc.place_ids || [],
+            file_url: null,
+            file_path: null,
+            error_message: null,
+            created_at: new Date(),
+            finished_at: null,
+            cooldown_until: null
+        };
+
+        const result = await database.collection('export_jobs').insertOne(doc);
+        return { success: true, id: result.insertedId, job: { _id: result.insertedId, ...doc } };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+async function updateExportJob(id, updates) {
+    try {
+        const database = await getDb();
+        const objId = toObjectId(id);
+        if (!objId) return false;
+
+        const setObj = { ...updates };
+        await database.collection('export_jobs').updateOne({ _id: objId }, { $set: setObj });
+        return true;
+    } catch (error) {
+        console.error('Erro ao atualizar job de exportação:', error);
+        return false;
+    }
+}
+
+async function getLatestExportJob(companyId, type = null) {
+    try {
+        const database = await getDb();
+        const cId = toObjectId(companyId);
+        if (!cId) return null;
+
+        const query = { company_id: cId };
+        if (type) query.type = type;
+
+        return await database.collection('export_jobs').find(query).sort({ created_at: -1 }).limit(1).toArray().then(arr => arr[0] || null);
+    } catch (error) {
+        console.error('Erro ao buscar último job de exportação:', error);
+        return null;
+    }
+}
+
+async function getExportJobs(companyId) {
+    try {
+        const database = await getDb();
+        const cId = toObjectId(companyId);
+        if (!cId) return [];
+
+        return await database.collection('export_jobs').find({ company_id: cId }).sort({ created_at: -1 }).limit(20).toArray();
+    } catch (error) {
+        return [];
     }
 }
 
@@ -667,21 +907,47 @@ async function initMultiTenantAndSuperUser() {
         const companiesColl = database.collection('companies');
         const usersColl = database.collection('users');
 
-        // 1. Verificar/criar a primeira empresa "SEO Company"
+        // Configuração padrão do CRM MZ Partners tirada das variáveis de ambiente para SEO Company
+        const defaultCrmConfig = {
+            client_token: process.env.CRM_CLIENT_TOKEN || '',
+            channel_id: process.env.CRM_CHANNEL_ID || '554888283608',
+            channel_type: process.env.CRM_CHANNEL_TYPE || 'WHATSAPP',
+            department_uuid: process.env.CRM_DEPARTMENT_UUID || '',
+            agent_uuid: process.env.CRM_AGENT_UUID || '',
+            tag_uuid: process.env.CRM_TAG_UUID || ''
+        };
+
         let seoCompany = await companiesColl.findOne({ name: { $regex: '^SEO Company$', $options: 'i' } });
         if (!seoCompany) {
             console.log('Empresa inicial "SEO Company" não encontrada. Criando empresa padrão...');
             const res = await companiesColl.insertOne({
                 name: 'SEO Company',
                 active: true,
+                allow_excel_export: true,
+                crm_enabled: true,
+                crm_provider: 'mz_partners',
+                crm_config: defaultCrmConfig,
                 created_at: new Date()
             });
             seoCompany = { _id: res.insertedId, name: 'SEO Company' };
             console.log(`Empresa SEO Company criada com ID: ${seoCompany._id}`);
+        } else {
+            // Atualizar configuração do CRM se ainda não estiver presente na SEO Company
+            await companiesColl.updateOne(
+                { _id: seoCompany._id },
+                {
+                    $set: {
+                        allow_excel_export: seoCompany.allow_excel_export !== undefined ? seoCompany.allow_excel_export : true,
+                        crm_enabled: seoCompany.crm_enabled !== undefined ? seoCompany.crm_enabled : true,
+                        crm_provider: seoCompany.crm_provider || 'mz_partners',
+                        crm_config: seoCompany.crm_config || defaultCrmConfig
+                    }
+                }
+            );
         }
         const seoCompanyId = seoCompany._id;
 
-        // 2. Garantir Superusuário Master (Joao Paulo)
+        // Garantir Superusuário Master (Joao Paulo)
         const masterEmail = 'joao@seocompany.com.br';
         let masterUser = await usersColl.findOne({ email: masterEmail });
         if (!masterUser) {
@@ -699,7 +965,6 @@ async function initMultiTenantAndSuperUser() {
             });
             console.log(`Superusuário ${masterEmail} criado com sucesso.`);
         } else {
-            // Atualizar privilégios de Master e associação de empresa se necessário
             await usersColl.updateOne(
                 { _id: masterUser._id },
                 {
@@ -712,7 +977,7 @@ async function initMultiTenantAndSuperUser() {
             );
         }
 
-        // 3. Vincular usuários existentes (Junior, etc) sem company_id para a SEO Company
+        // Vincular usuários existentes (Junior, etc) sem company_id para a SEO Company
         await usersColl.updateMany(
             { company_id: { $exists: false } },
             {
@@ -724,7 +989,7 @@ async function initMultiTenantAndSuperUser() {
             }
         );
 
-        // 4. Migrar coleções legadas sem company_id para a SEO Company
+        // Migrar coleções legadas sem company_id para a SEO Company
         const collectionsToMigrate = ['places', 'activities', 'cities', 'neighborhoods'];
         for (const collName of collectionsToMigrate) {
             const coll = database.collection(collName);
@@ -735,23 +1000,23 @@ async function initMultiTenantAndSuperUser() {
                     { company_id: { $exists: false } },
                     { $set: { company_id: seoCompanyId } }
                 );
-                console.log(`Migração da coleção ${collName} concluída!`);
             }
         }
 
-        // 5. Criar índices compostos para performance e isolamento de multi-tenancy
+        // Criar índices compostos
         await database.collection('places').createIndex({ company_id: 1, place_id: 1 });
         await database.collection('activities').createIndex({ company_id: 1, nome: 1 });
         await database.collection('cities').createIndex({ company_id: 1, chave: 1 });
         await database.collection('neighborhoods').createIndex({ company_id: 1, chave: 1 });
+        await database.collection('tags').createIndex({ company_id: 1, name: 1 });
+        await database.collection('export_jobs').createIndex({ company_id: 1, created_at: -1 });
 
-        console.log('Inicialização Multi-Tenant concluída com sucesso!');
+        console.log('Inicialização Multi-Tenant e Índices concluídos com sucesso!');
     } catch (error) {
         console.error('Erro na inicialização Multi-Tenant:', error);
     }
 }
 
-// Manter retrocompatibilidade com chamada initSuperUser
 async function initSuperUser() {
     await initMultiTenantAndSuperUser();
 }
@@ -764,10 +1029,16 @@ module.exports = {
     createCompany,
     updateCompany,
     deleteCompany,
+    getTags,
+    createTag,
+    updateTag,
+    deleteTag,
+    bulkApplyTags,
     getPlaces,
     getActivities,
     updatePlaceFromGoogle,
     updateImportedStatus,
+    markPlacesAsExcelExported,
     getPlaceById,
     getCities,
     addCity,
@@ -781,6 +1052,10 @@ module.exports = {
     updateActivity,
     deleteActivity,
     savePlaceDirectly,
+    createExportJob,
+    updateExportJob,
+    getLatestExportJob,
+    getExportJobs,
     initSuperUser,
     initMultiTenantAndSuperUser,
     getUserByEmail,

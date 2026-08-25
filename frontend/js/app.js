@@ -8,19 +8,32 @@ const filterLimit = document.getElementById('filterLimit');
 
 let currentPage = 1;
 let totalResults = 0;
+let selectedPlaceIds = new Set();
+let cachedCompanyTags = [];
+
+// --- LOCAIS (PLACES) E FILTROS ---
 
 async function loadPlaces(isNewSearch = false) {
     if (isNewSearch) {
         currentPage = 1;
+        selectedPlaceIds.clear();
+        updateSelectedCount();
     }
 
     const limit = parseInt(filterLimit.value) || 50;
+
+    // Obtém tags selecionadas no filtro
+    const filterTagsSelect = document.getElementById('filterTags');
+    const selectedTags = filterTagsSelect ? Array.from(filterTagsSelect.selectedOptions).map(opt => opt.value) : [];
 
     const filters = {
         nome: document.getElementById('filterNome').value,
         tipo: document.getElementById('filterTipo').value,
         cidade: document.getElementById('filterCidade').value,
         bairro: document.getElementById('filterBairro').value,
+        crmStatus: document.getElementById('filterCrmStatus') ? document.getElementById('filterCrmStatus').value : '',
+        excelStatus: document.getElementById('filterExcelStatus') ? document.getElementById('filterExcelStatus').value : '',
+        tags: selectedTags,
         ratingMin: document.getElementById('filterRatingMin').value,
         ratingMax: document.getElementById('filterRatingMax').value,
         totalAvaliacoesMin: document.getElementById('filterTotalMin').value,
@@ -35,6 +48,9 @@ async function loadPlaces(isNewSearch = false) {
     totalResults = response.total || 0;
 
     placesGrid.innerHTML = '';
+
+    const chkSelectAll = document.getElementById('chkSelectAll');
+    if (chkSelectAll) chkSelectAll.checked = false;
 
     if (places.length === 0) {
         placesGrid.innerHTML = '<p style="color: var(--text-secondary); text-align: center; grid-column: 1 / -1; padding: 2rem;">Nenhum local encontrado para os filtros selecionados.</p>';
@@ -52,20 +68,41 @@ async function loadPlaces(isNewSearch = false) {
         if (isClosed) statusClass = 'status-closed';
         
         const formattedStatus = place.businessStatus ? place.businessStatus.replace(/_/g, ' ') : 'N/A';
-        const isImported = place.importado ? 'checked' : '';
+        
+        const isCrmExported = place.crm_exported || place.importado;
+        const isExcelExported = place.excel_exported;
+        const isChecked = selectedPlaceIds.has(place.place_id) ? 'checked' : '';
+
+        // Renderiza pílulas de tags do local
+        let tagsHtml = '';
+        if (place.tags && Array.isArray(place.tags) && place.tags.length > 0 && cachedCompanyTags.length > 0) {
+            tagsHtml = '<div class="place-tags-list">';
+            place.tags.forEach(tId => {
+                const tagObj = cachedCompanyTags.find(t => t._id === tId || t._id === tId._id);
+                if (tagObj) {
+                    tagsHtml += `<span class="tag-pill" style="background: ${tagObj.color || '#3b82f6'};">🏷️ ${tagObj.name}</span>`;
+                }
+            });
+            tagsHtml += '</div>';
+        }
 
         const card = `
-            <div class="place-card">
-                <div class="card-header">
-                    <div class="card-header-left">
-                        <h3 class="card-title">${place.nome || 'Sem Nome'}</h3>
-                        <span class="card-type">${place.tipo || 'N/A'}</span>
-                    </div>
-                    <div class="card-rating-wrapper">
-                        <div class="card-rating">
-                            ⭐ ${place.rating || 'N/A'}
+            <div class="place-card" data-place-id="${place.place_id}">
+                <div class="place-card-top-row">
+                    <input type="checkbox" class="chk-place-select" data-place-id="${place.place_id}" ${isChecked}>
+                    <div style="flex: 1;">
+                        <div class="card-header" style="margin-bottom: 0;">
+                            <div class="card-header-left">
+                                <h3 class="card-title">${place.nome || 'Sem Nome'}</h3>
+                                <span class="card-type">${place.tipo || 'N/A'}</span>
+                            </div>
+                            <div class="card-rating-wrapper">
+                                <div class="card-rating">
+                                    ⭐ ${place.rating || 'N/A'}
+                                </div>
+                                <span class="rating-count">(${place.total_avaliacoes || 0} avaliações)</span>
+                            </div>
                         </div>
-                        <span class="rating-count">(${place.total_avaliacoes || 0} avaliações)</span>
                     </div>
                 </div>
                 
@@ -78,6 +115,7 @@ async function loadPlaces(isNewSearch = false) {
                         <span class="info-icon">📞</span>
                         <span>${place.telefone || 'N/A'}</span>
                     </div>
+                    ${tagsHtml}
                     ${hasValidWebsite ? `
                     <div class="website-container">
                         <a href="${place.website}" target="_blank" class="website-link">Visitar Site ↗</a>
@@ -86,11 +124,15 @@ async function loadPlaces(isNewSearch = false) {
 
                 <div class="card-footer">
                     <span class="status-badge ${statusClass}">${formattedStatus}</span>
-                    <label class="imported-checkbox" title="Marcar como importado no CRM">
-                        <input type="checkbox" class="chk-imported" data-place-id="${place.place_id}" ${isImported}>
-                        <span>CRM</span>
-                    </label>
-                    <button class="btn-update" data-place-id="${place.place_id}" title="Atualizar dados do Google Maps" style="margin-right: 0;">
+                    <div style="display: flex; gap: 0.4rem; align-items: center;">
+                        <span class="badge-status-pill ${isCrmExported ? 'badge-status-active' : 'badge-status-inactive'}" title="${isCrmExported ? 'Enviado para o CRM' : 'Não enviado ao CRM'}">
+                            ${isCrmExported ? '🟢 CRM' : '⚪ CRM'}
+                        </span>
+                        <span class="badge-status-pill ${isExcelExported ? 'badge-status-active' : 'badge-status-inactive'}" title="${isExcelExported ? 'Exportado para Excel' : 'Não exportado para Excel'}">
+                            ${isExcelExported ? '🟢 Excel' : '⚪ Excel'}
+                        </span>
+                    </div>
+                    <button class="btn-update" data-place-id="${place.place_id}" title="Atualizar dados do Google Maps" style="margin-left: auto; margin-right: 0;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-refresh"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.58 5.58"/></svg>
                     </button>
                 </div>
@@ -99,7 +141,27 @@ async function loadPlaces(isNewSearch = false) {
         placesGrid.insertAdjacentHTML('beforeend', card);
     });
 
+    // Listeners das seleções individuais
+    document.querySelectorAll('.chk-place-select').forEach(chk => {
+        chk.addEventListener('change', (e) => {
+            const pId = e.target.getAttribute('data-place-id');
+            if (e.target.checked) {
+                selectedPlaceIds.add(pId);
+            } else {
+                selectedPlaceIds.delete(pId);
+            }
+            updateSelectedCount();
+        });
+    });
+
     updatePagination(limit);
+}
+
+function updateSelectedCount() {
+    const badge = document.getElementById('selectedCountBadge');
+    if (badge) {
+        badge.textContent = `${selectedPlaceIds.size} selecionados`;
+    }
 }
 
 function updatePagination(limit) {
@@ -113,6 +175,14 @@ function clearFilters() {
     document.getElementById('filterTipo').value = '';
     document.getElementById('filterCidade').value = '';
     document.getElementById('filterBairro').value = '';
+    if (document.getElementById('filterCrmStatus')) document.getElementById('filterCrmStatus').value = '';
+    if (document.getElementById('filterExcelStatus')) document.getElementById('filterExcelStatus').value = '';
+    
+    const filterTagsSelect = document.getElementById('filterTags');
+    if (filterTagsSelect) {
+        Array.from(filterTagsSelect.options).forEach(opt => opt.selected = false);
+    }
+
     document.getElementById('filterRatingMin').value = '';
     document.getElementById('filterRatingMax').value = '';
     document.getElementById('filterTotalMin').value = '';
@@ -153,25 +223,6 @@ placesGrid.addEventListener('click', async (e) => {
     }
 });
 
-placesGrid.addEventListener('change', async (e) => {
-    if (e.target.classList.contains('chk-imported')) {
-        const placeId = e.target.getAttribute('data-place-id');
-        const isImported = e.target.checked;
-        
-        try {
-            const result = await window.api.updateImportedStatus(placeId, isImported);
-            if (!result.success) {
-                alert('Erro ao atualizar status no CRM: ' + result.error);
-                e.target.checked = !isImported;
-            }
-        } catch (error) {
-            console.error('Erro:', error);
-            alert('Erro inesperado ao atualizar status.');
-            e.target.checked = !isImported;
-        }
-    }
-});
-
 btnPrev.addEventListener('click', () => {
     if (currentPage > 1) {
         currentPage--;
@@ -183,6 +234,366 @@ btnNext.addEventListener('click', () => {
     loadPlaces();
 });
 filterLimit.addEventListener('change', () => loadPlaces(true));
+
+// --- SELEÇÃO EM LOTE E EXPORTAÇÃO ---
+
+const chkSelectAll = document.getElementById('chkSelectAll');
+if (chkSelectAll) {
+    chkSelectAll.addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        document.querySelectorAll('.chk-place-select').forEach(chk => {
+            chk.checked = isChecked;
+            const pId = chk.getAttribute('data-place-id');
+            if (isChecked) selectedPlaceIds.add(pId);
+            else selectedPlaceIds.delete(pId);
+        });
+        updateSelectedCount();
+    });
+}
+
+// Botão Exportar Excel (Ação em Lote)
+const btnBulkExcel = document.getElementById('btnBulkExcel');
+if (btnBulkExcel) {
+    btnBulkExcel.addEventListener('click', async () => {
+        const placeIds = Array.from(selectedPlaceIds);
+        const filters = getActiveFiltersPayload();
+
+        if (placeIds.length === 0 && !confirm(`Deseja exportar todos os ${totalResults} locais correspondentes ao filtro atual para o Excel?`)) {
+            return;
+        }
+
+        btnBulkExcel.disabled = true;
+        showExportProgressBanner('Gerando Arquivo Excel...', 'Preparando solicitação...', true);
+
+        try {
+            const res = await window.api.bulkExportExcel(filters, placeIds);
+            if (res.success) {
+                showExportProgressBanner('Processando Arquivo Excel...', 'Sua exportação está sendo gerada em background.', true);
+            } else {
+                alert(res.error || 'Erro ao iniciar exportação para Excel.');
+                hideExportProgressBanner();
+            }
+        } catch (err) {
+            alert('Erro ao iniciar exportação para Excel: ' + err.message);
+            hideExportProgressBanner();
+        } finally {
+            btnBulkExcel.disabled = false;
+        }
+    });
+}
+
+// Botão Enviar CRM (Ação em Lote)
+const btnBulkCRM = document.getElementById('btnBulkCRM');
+if (btnBulkCRM) {
+    btnBulkCRM.addEventListener('click', async () => {
+        const placeIds = Array.from(selectedPlaceIds);
+        const filters = getActiveFiltersPayload();
+
+        if (placeIds.length === 0 && !confirm(`Deseja enviar todos os ${totalResults} locais correspondentes ao filtro atual para a fila do CRM?`)) {
+            return;
+        }
+
+        btnBulkCRM.disabled = true;
+        showExportProgressBanner('Enviando para o CRM...', 'Preparando transmissão de contatos...', true);
+
+        try {
+            const res = await window.api.bulkExportCRM(filters, placeIds);
+            if (res.success) {
+                showExportProgressBanner('Enviando para o CRM...', 'Contatos sendo processados em lote.', true);
+            } else {
+                alert(res.error || 'Erro ao iniciar envio para o CRM.');
+                hideExportProgressBanner();
+            }
+        } catch (err) {
+            alert('Erro ao iniciar envio para o CRM: ' + err.message);
+            hideExportProgressBanner();
+        } finally {
+            btnBulkCRM.disabled = false;
+        }
+    });
+}
+
+function getActiveFiltersPayload() {
+    const filterTagsSelect = document.getElementById('filterTags');
+    const selectedTags = filterTagsSelect ? Array.from(filterTagsSelect.selectedOptions).map(opt => opt.value) : [];
+
+    return {
+        nome: document.getElementById('filterNome').value,
+        tipo: document.getElementById('filterTipo').value,
+        cidade: document.getElementById('filterCidade').value,
+        bairro: document.getElementById('filterBairro').value,
+        crmStatus: document.getElementById('filterCrmStatus') ? document.getElementById('filterCrmStatus').value : '',
+        excelStatus: document.getElementById('filterExcelStatus') ? document.getElementById('filterExcelStatus').value : '',
+        tags: selectedTags,
+        ratingMin: document.getElementById('filterRatingMin').value,
+        ratingMax: document.getElementById('filterRatingMax').value,
+        totalAvaliacoesMin: document.getElementById('filterTotalMin').value,
+        totalAvaliacoesMax: document.getElementById('filterTotalMax').value,
+        businessStatus: document.getElementById('filterStatus').value
+    };
+}
+
+// --- BANNER DE PROGRESSO DE EXPORTAÇÃO E SOCKET.IO ---
+
+const exportProgressBanner = document.getElementById('exportProgressBanner');
+const exportProgressTitle = document.getElementById('exportProgressTitle');
+const exportProgressMsg = document.getElementById('exportProgressMsg');
+const exportProgressBarContainer = document.getElementById('exportProgressBarContainer');
+const exportProgressBar = document.getElementById('exportProgressBar');
+const exportDownloadWrapper = document.getElementById('exportDownloadWrapper');
+const btnDownloadExport = document.getElementById('btnDownloadExport');
+
+function showExportProgressBanner(title, msg, showProgressBar = true) {
+    if (!exportProgressBanner) return;
+    exportProgressTitle.textContent = title;
+    exportProgressMsg.textContent = msg;
+    exportProgressBanner.classList.remove('hidden');
+
+    if (showProgressBar) {
+        exportProgressBarContainer.classList.remove('hidden');
+        exportProgressBar.style.width = '5%';
+    } else {
+        exportProgressBarContainer.classList.add('hidden');
+    }
+    exportDownloadWrapper.classList.add('hidden');
+}
+
+function hideExportProgressBanner() {
+    if (exportProgressBanner) {
+        exportProgressBanner.classList.add('hidden');
+    }
+}
+
+function setupExportSocketListeners(companyId) {
+    window.api.onExportProgress(companyId, (data) => {
+        showExportProgressBanner(
+            data.type === 'excel' ? 'Gerando Planilha Excel...' : 'Enviando para o CRM...',
+            `Processando ${data.processed} de ${data.total} locais...`,
+            true
+        );
+        const pct = Math.round((data.processed / (data.total || 1)) * 100);
+        exportProgressBar.style.width = `${pct}%`;
+    });
+
+    window.api.onExportFinished(companyId, (data) => {
+        exportProgressBar.style.width = '100%';
+        if (data.type === 'excel' && data.fileUrl) {
+            exportProgressTitle.textContent = '✅ Exportação Concluída com Sucesso!';
+            exportProgressMsg.textContent = `Arquivo gerado contendo ${data.total} locais. O link ficará disponível por 30 dias.`;
+            btnDownloadExport.href = data.fileUrl;
+            exportDownloadWrapper.classList.remove('hidden');
+        } else {
+            exportProgressTitle.textContent = '✅ Envio ao CRM Concluído!';
+            exportProgressMsg.textContent = `Processados ${data.total} locais. (${data.successCount} com sucesso, ${data.failureCount} falhas).`;
+        }
+
+        setTimeout(() => {
+            loadPlaces();
+        }, 1500);
+    });
+
+    window.api.onExportError(companyId, (data) => {
+        exportProgressTitle.textContent = '❌ Erro no Processamento';
+        exportProgressMsg.textContent = data.error || 'Ocorreu um erro durante a exportação.';
+        exportProgressBarContainer.classList.add('hidden');
+        exportDownloadWrapper.classList.add('hidden');
+    });
+}
+
+// --- GESTÃO DE TAGS (MODAIS & OPERAÇÕES) ---
+
+const btnManageTags = document.getElementById('btnManageTags');
+const tagsModal = document.getElementById('tagsModal');
+const closeTagsModal = document.getElementById('closeTagsModal');
+const btnCloseTagsModal = document.getElementById('btnCloseTagsModal');
+const formCreateTag = document.getElementById('formCreateTag');
+const tagsListContainer = document.getElementById('tagsListContainer');
+
+async function reloadCompanyTags() {
+    try {
+        const res = await window.api.getTags();
+        cachedCompanyTags = res.data || [];
+        populateFilterTagsSelect();
+    } catch (e) {
+        console.error('Erro ao carregar tags:', e);
+    }
+}
+
+function populateFilterTagsSelect() {
+    const select = document.getElementById('filterTags');
+    if (!select) return;
+
+    const currentSelected = Array.from(select.selectedOptions).map(o => o.value);
+    select.innerHTML = '';
+
+    cachedCompanyTags.forEach(t => {
+        const isSel = currentSelected.includes(t._id) ? 'selected' : '';
+        select.insertAdjacentHTML('beforeend', `<option value="${t._id}" ${isSel}>🏷️ ${t.name}</option>`);
+    });
+}
+
+function openTagsModal() {
+    if (!tagsModal) return;
+    tagsModal.style.display = 'flex';
+    setTimeout(() => { tagsModal.classList.add('show'); }, 10);
+    renderTagsManagerList();
+}
+
+function hideTagsModal() {
+    if (tagsModal) {
+        tagsModal.classList.remove('show');
+        setTimeout(() => { tagsModal.style.display = 'none'; }, 300);
+    }
+}
+
+if (btnManageTags) btnManageTags.addEventListener('click', openTagsModal);
+if (closeTagsModal) closeTagsModal.addEventListener('click', hideTagsModal);
+if (btnCloseTagsModal) btnCloseTagsModal.addEventListener('click', hideTagsModal);
+
+if (formCreateTag) {
+    formCreateTag.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nameInput = document.getElementById('newTagName');
+        const colorInput = document.getElementById('newTagColor');
+
+        const name = nameInput.value.trim();
+        const color = colorInput.value;
+
+        if (!name) return;
+
+        try {
+            const res = await window.api.createTag({ name, color });
+            if (res.success) {
+                nameInput.value = '';
+                await reloadCompanyTags();
+                renderTagsManagerList();
+                if (document.querySelector('.tab-content.active-content')?.id === 'placesSection') {
+                    loadPlaces();
+                }
+            } else {
+                alert('Erro ao criar tag: ' + res.error);
+            }
+        } catch (err) {
+            alert('Erro ao criar tag.');
+        }
+    });
+}
+
+function renderTagsManagerList() {
+    if (!tagsListContainer) return;
+    tagsListContainer.innerHTML = '';
+
+    if (cachedCompanyTags.length === 0) {
+        tagsListContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 1rem;">Nenhuma tag cadastrada.</p>';
+        return;
+    }
+
+    cachedCompanyTags.forEach(t => {
+        const row = `
+            <div class="tag-item-row">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="tag-pill" style="background: ${t.color || '#3b82f6'};">🏷️ ${t.name}</span>
+                </div>
+                <button class="btn-icon btn-icon-delete btn-delete-tag" data-id="${t._id}" data-name="${t.name}" title="Excluir Tag">
+                    <svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>
+                </button>
+            </div>
+        `;
+        tagsListContainer.insertAdjacentHTML('beforeend', row);
+    });
+
+    tagsListContainer.querySelectorAll('.btn-delete-tag').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            const name = btn.getAttribute('data-name');
+            if (confirm(`Excluir a tag "${name}"? Ela será removida de todos os locais.`)) {
+                const res = await window.api.deleteTag(id);
+                if (res.success) {
+                    await reloadCompanyTags();
+                    renderTagsManagerList();
+                    loadPlaces();
+                } else {
+                    alert('Erro ao excluir tag: ' + res.error);
+                }
+            }
+        });
+    });
+}
+
+// Modal Aplicar Tags aos Locais Selecionados
+const btnBulkTags = document.getElementById('btnBulkTags');
+const applyTagsModal = document.getElementById('applyTagsModal');
+const closeApplyTagsModal = document.getElementById('closeApplyTagsModal');
+const btnApplyTagsCancel = document.getElementById('btnApplyTagsCancel');
+const btnApplyTagsSubmit = document.getElementById('btnApplyTagsSubmit');
+const applyTagsSelectContainer = document.getElementById('applyTagsSelectContainer');
+
+function openApplyTagsModal() {
+    if (selectedPlaceIds.size === 0) {
+        alert('Selecione pelo menos um local para aplicar tags.');
+        return;
+    }
+    if (cachedCompanyTags.length === 0) {
+        alert('Nenhuma tag cadastrada. Clique em "⚙️ Tags" para criar sua primeira tag.');
+        return;
+    }
+
+    document.getElementById('applyTagsSubtitle').textContent = `Selecione as tags a serem associadas a ${selectedPlaceIds.size} locais selecionados:`;
+    applyTagsSelectContainer.innerHTML = '';
+
+    cachedCompanyTags.forEach(t => {
+        const item = `
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer;">
+                <input type="checkbox" class="chk-apply-tag" value="${t._id}" style="width: 18px; height: 18px;">
+                <span class="tag-pill" style="background: ${t.color || '#3b82f6'};">🏷️ ${t.name}</span>
+            </label>
+        `;
+        applyTagsSelectContainer.insertAdjacentHTML('beforeend', item);
+    });
+
+    applyTagsModal.style.display = 'flex';
+    setTimeout(() => { applyTagsModal.classList.add('show'); }, 10);
+}
+
+function hideApplyTagsModal() {
+    if (applyTagsModal) {
+        applyTagsModal.classList.remove('show');
+        setTimeout(() => { applyTagsModal.style.display = 'none'; }, 300);
+    }
+}
+
+if (btnBulkTags) btnBulkTags.addEventListener('click', openApplyTagsModal);
+if (closeApplyTagsModal) closeApplyTagsModal.addEventListener('click', hideApplyTagsModal);
+if (btnApplyTagsCancel) btnApplyTagsCancel.addEventListener('click', hideApplyTagsModal);
+
+if (btnApplyTagsSubmit) {
+    btnApplyTagsSubmit.addEventListener('click', async () => {
+        const selectedTagIds = Array.from(document.querySelectorAll('.chk-apply-tag:checked')).map(c => c.value);
+        if (selectedTagIds.length === 0) {
+            alert('Selecione ao menos uma tag para aplicar.');
+            return;
+        }
+
+        btnApplyTagsSubmit.disabled = true;
+        btnApplyTagsSubmit.textContent = 'Aplicando...';
+
+        try {
+            const placeIds = Array.from(selectedPlaceIds);
+            const res = await window.api.bulkApplyTags(placeIds, selectedTagIds, 'add');
+            if (res.success) {
+                hideApplyTagsModal();
+                loadPlaces();
+            } else {
+                alert('Erro ao aplicar tags: ' + res.error);
+            }
+        } catch (e) {
+            alert('Erro ao aplicar tags.');
+        } finally {
+            btnApplyTagsSubmit.disabled = false;
+            btnApplyTagsSubmit.textContent = 'Aplicar Tags';
+        }
+    });
+}
 
 // --- LÓGICA DE GERENCIAMENTO DE ABAS ---
 const tabs = document.querySelectorAll('.nav-tab');
@@ -219,6 +630,7 @@ function reloadCurrentTab() {
     if (!activeTab) return;
     const targetId = activeTab.getAttribute('data-target');
     
+    reloadCompanyTags();
     reloadActivitiesFilter();
     
     if (targetId === 'placesSection') {
@@ -274,11 +686,8 @@ function hideModal() {
     editModal.classList.remove('show');
 }
 
-closeModal.addEventListener('click', hideModal);
-btnModalCancel.addEventListener('click', hideModal);
-window.addEventListener('click', (e) => {
-    if (e.target === editModal) hideModal();
-});
+if (closeModal) closeModal.addEventListener('click', hideModal);
+if (btnModalCancel) btnModalCancel.addEventListener('click', hideModal);
 
 // --- CRUD: ATIVIDADES (TERMOS DE BUSCA) ---
 const formActivity = document.getElementById('formActivity');
@@ -530,7 +939,7 @@ async function loadCitiesAdmin() {
                                 </form>
                                 <div style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
                                     <button class="btn-small btn-small-ai btn-generate-bairros-ai" data-municipio="${city.municipio}" data-estado="${city.estado}">
-                                        ✨ Auto-Gerar Bairros com IA
+                                        ✨ Gerar Lista Completa de Bairros (IA)
                                     </button>
                                 </div>
                             </div>
@@ -633,7 +1042,7 @@ async function loadCitiesAdmin() {
                 
                 btn.disabled = true;
                 const originalText = btn.innerHTML;
-                btn.innerHTML = '⌛ Gerando Bairros (Aguarde)...';
+                btn.innerHTML = '⌛ Gerando Bairros pela IA (Aguarde)...';
                 
                 try {
                     const res = await window.api.generateNeighborhoods(municipio, estado);
@@ -1106,7 +1515,6 @@ async function init() {
         
         overlay.classList.add('hidden');
         
-        // Salva dados no localStorage
         localStorage.setItem('user', JSON.stringify(user));
         if (user.current_company_id) {
             localStorage.setItem('current_company_id', user.current_company_id);
@@ -1132,6 +1540,11 @@ async function init() {
             companyBadgeContainer.classList.remove('hidden');
             headerCompanyName.textContent = user.company_name || 'SEO Company';
         }
+
+        // Configura Socket.io para exportações da empresa
+        if (user.current_company_id) {
+            setupExportSocketListeners(user.current_company_id);
+        }
         
         // Se for admin/master, exibe opções adicionais
         const isMaster = !!user.is_master;
@@ -1143,7 +1556,6 @@ async function init() {
             if (liAllUsers) liAllUsers.classList.remove('hidden');
         }
 
-        // Exibe opções exclusivas do usuário Master no dropdown
         if (isMaster) {
             const liSwitchCompany = document.getElementById('liSwitchCompany');
             const liNewCompany = document.getElementById('liNewCompany');
@@ -1158,10 +1570,10 @@ async function init() {
             const userCompanyGroup = document.getElementById('userCompanyGroup');
             if (userCompanyGroup) userCompanyGroup.classList.remove('hidden');
 
-            // Carrega empresas no select do formulário de usuário
             loadCompaniesInUserSelect(res.companies || []);
         }
         
+        await reloadCompanyTags();
         await reloadActivitiesFilter();
         await loadPlaces(true);
     } catch (error) {
@@ -1313,7 +1725,7 @@ function renderSwitchCompanyList(companies) {
 if (closeSwitchCompanyModal) closeSwitchCompanyModal.addEventListener('click', hideSwitchCompanyModal);
 if (btnSwitchCompanyCancel) btnSwitchCompanyCancel.addEventListener('click', hideSwitchCompanyModal);
 
-// Modal Cadastrar / Editar Empresa
+// Modal Cadastrar / Editar Empresa (Com CRM e Permissões)
 const companyModal = document.getElementById('companyModal');
 const companyModalTitle = document.getElementById('companyModalTitle');
 const closeCompanyModal = document.getElementById('closeCompanyModal');
@@ -1322,6 +1734,22 @@ const btnCompanySave = document.getElementById('btnCompanySave');
 const formCompany = document.getElementById('formCompany');
 const companyError = document.getElementById('companyError');
 
+const companyAllowExcel = document.getElementById('companyAllowExcel');
+const companyCrmEnabled = document.getElementById('companyCrmEnabled');
+const crmConfigFields = document.getElementById('crmConfigFields');
+const companyCrmProvider = document.getElementById('companyCrmProvider');
+const companyCrmClientToken = document.getElementById('companyCrmClientToken');
+const companyCrmChannelId = document.getElementById('companyCrmChannelId');
+const companyCrmDepartmentUuid = document.getElementById('companyCrmDepartmentUuid');
+const companyCrmAgentUuid = document.getElementById('companyCrmAgentUuid');
+const companyCrmTagUuid = document.getElementById('companyCrmTagUuid');
+
+if (companyCrmEnabled) {
+    companyCrmEnabled.addEventListener('change', (e) => {
+        crmConfigFields.classList.toggle('hidden', !e.target.checked);
+    });
+}
+
 function hideCompanyModal() {
     if (companyModal) {
         companyModal.classList.remove('show');
@@ -1329,12 +1757,43 @@ function hideCompanyModal() {
     }
 }
 
-function openCompanyModal(id = null, currentName = '') {
+async function openCompanyModal(id = null, currentName = '') {
     if (!companyModal) return;
     document.getElementById('companyId').value = id || '';
     document.getElementById('companyName').value = currentName || '';
     companyModalTitle.textContent = id ? 'Editar Cliente (Empresa)' : 'Novo Cliente (Empresa)';
     if (companyError) companyError.classList.add('hidden');
+
+    if (id) {
+        try {
+            const res = await window.api.getCompany(id);
+            const comp = res.data;
+            if (comp) {
+                companyAllowExcel.checked = comp.allow_excel_export !== false;
+                companyCrmEnabled.checked = !!comp.crm_enabled;
+                crmConfigFields.classList.toggle('hidden', !comp.crm_enabled);
+
+                const crmConf = comp.crm_config || {};
+                companyCrmProvider.value = comp.crm_provider || 'mz_partners';
+                companyCrmClientToken.value = crmConf.client_token || '';
+                companyCrmChannelId.value = crmConf.channel_id || '';
+                companyCrmDepartmentUuid.value = crmConf.department_uuid || '';
+                companyCrmAgentUuid.value = crmConf.agent_uuid || '';
+                companyCrmTagUuid.value = crmConf.tag_uuid || '';
+            }
+        } catch (e) {
+            console.error('Erro ao buscar empresa:', e);
+        }
+    } else {
+        companyAllowExcel.checked = true;
+        companyCrmEnabled.checked = false;
+        crmConfigFields.classList.add('hidden');
+        companyCrmClientToken.value = '';
+        companyCrmChannelId.value = '';
+        companyCrmDepartmentUuid.value = '';
+        companyCrmAgentUuid.value = '';
+        companyCrmTagUuid.value = '';
+    }
 
     companyModal.style.display = 'flex';
     setTimeout(() => { companyModal.classList.add('show'); }, 10);
@@ -1355,15 +1814,30 @@ if (btnCompanySave && formCompany) {
             return;
         }
 
+        const companyData = {
+            name,
+            allow_excel_export: companyAllowExcel.checked,
+            crm_enabled: companyCrmEnabled.checked,
+            crm_provider: companyCrmProvider.value,
+            crm_config: {
+                client_token: companyCrmClientToken.value.trim(),
+                channel_id: companyCrmChannelId.value.trim(),
+                channel_type: 'WHATSAPP',
+                department_uuid: companyCrmDepartmentUuid.value.trim(),
+                agent_uuid: companyCrmAgentUuid.value.trim(),
+                tag_uuid: companyCrmTagUuid.value.trim()
+            }
+        };
+
         btnCompanySave.disabled = true;
         btnCompanySave.textContent = 'Salvando...';
 
         try {
             let res;
             if (id) {
-                res = await window.api.updateCompany(id, name);
+                res = await window.api.updateCompany(id, companyData);
             } else {
-                res = await window.api.createCompany(name);
+                res = await window.api.createCompany(companyData);
             }
 
             if (res.success) {
@@ -1411,7 +1885,7 @@ async function loadCompaniesAdminTable() {
     const tableBody = document.getElementById('companiesTableBody');
     if (!tableBody) return;
     
-    tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 1.5rem;">Carregando empresas...</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 1.5rem;">Carregando empresas...</td></tr>';
     
     try {
         const res = await window.api.getCompanies();
@@ -1419,7 +1893,7 @@ async function loadCompaniesAdminTable() {
         tableBody.innerHTML = '';
 
         if (companies.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 1.5rem;">Nenhuma empresa cadastrada.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 1.5rem;">Nenhuma empresa cadastrada.</td></tr>';
             return;
         }
 
@@ -1428,6 +1902,9 @@ async function loadCompaniesAdminTable() {
         companies.forEach(c => {
             const date = new Date(c.created_at).toLocaleDateString('pt-BR');
             const isActive = c._id === currentCompanyId;
+
+            const crmBadge = c.crm_enabled ? '<span class="badge badge-active">Ativo</span>' : '<span class="badge badge-inactive">Inativo</span>';
+            const excelBadge = c.allow_excel_export !== false ? '<span class="badge badge-active">Permitido</span>' : '<span class="badge badge-inactive">Bloqueado</span>';
 
             const btnSwitch = isActive ? 
                 '<span class="badge badge-active">Empresa Ativa</span>' :
@@ -1444,6 +1921,8 @@ async function loadCompaniesAdminTable() {
             const row = `
                 <tr>
                     <td><strong>${c.name}</strong></td>
+                    <td>${crmBadge}</td>
+                    <td>${excelBadge}</td>
                     <td>${date}</td>
                     <td>${btnSwitch} ${btnEdit} ${btnDelete}</td>
                 </tr>
@@ -1495,7 +1974,7 @@ async function loadCompaniesAdminTable() {
 
     } catch (e) {
         console.error(e);
-        tableBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: red;">Erro ao carregar lista de empresas.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Erro ao carregar lista de empresas.</td></tr>';
     }
 }
 

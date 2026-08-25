@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=6">
 </head>
 
 <body>
@@ -84,6 +84,28 @@
                         <input type="text" id="filterBairro" placeholder="Ex: Centro...">
                     </div>
                     <div class="filter-group">
+                        <label for="filterCrmStatus">Status CRM</label>
+                        <select id="filterCrmStatus">
+                            <option value="">Todos os Locais</option>
+                            <option value="exported">🟢 Enviados para o CRM</option>
+                            <option value="not_exported">⚪ Não Enviados para o CRM</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterExcelStatus">Status Excel</label>
+                        <select id="filterExcelStatus">
+                            <option value="">Todos os Locais</option>
+                            <option value="exported">🟢 Exportados para Excel</option>
+                            <option value="not_exported">⚪ Não Exportados para Excel</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="filterTags">Tags</label>
+                        <select id="filterTags" multiple style="min-height: 80px;">
+                            <!-- Opções injetadas via JS -->
+                        </select>
+                    </div>
+                    <div class="filter-group">
                         <label>Avaliação (Rating)</label>
                         <div class="range-inputs">
                             <input type="number" id="filterRatingMin" step="0.1" min="0" max="5" placeholder="Mín.">
@@ -98,7 +120,7 @@
                         </div>
                     </div>
                     <div class="filter-group">
-                        <label for="filterStatus">Status</label>
+                        <label for="filterStatus">Status Operacional</label>
                         <select id="filterStatus">
                             <option value="">Qualquer</option>
                             <option value="OPERATIONAL">Operacional</option>
@@ -122,6 +144,49 @@
                 </aside>
 
                 <div class="results-container">
+                    <!-- Banner de Notificação / Progresso de Exportação -->
+                    <div id="exportProgressBanner" class="export-progress-banner hidden">
+                        <div class="banner-info">
+                            <span id="exportProgressIcon" class="spinner-icon">🔄</span>
+                            <div class="banner-text">
+                                <strong id="exportProgressTitle">Processando Exportação...</strong>
+                                <span id="exportProgressMsg">Aguarde a finalização do processo.</span>
+                            </div>
+                        </div>
+                        <div id="exportProgressBarContainer" class="export-progress-bar-wrapper hidden">
+                            <div id="exportProgressBar" class="export-progress-bar-inner"></div>
+                        </div>
+                        <div id="exportDownloadWrapper" class="hidden">
+                            <a id="btnDownloadExport" href="#" target="_blank" class="btn-download-link">📥 Baixar Arquivo Excel</a>
+                        </div>
+                    </div>
+
+                    <!-- Barra de Ações em Lote -->
+                    <div class="bulk-actions-bar">
+                        <div class="bulk-selection-group">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="chkSelectAll">
+                                <span class="checkmark"></span>
+                                <span class="select-all-label">Selecionar Todos da Página</span>
+                            </label>
+                            <span id="selectedCountBadge" class="selected-count-badge">0 selecionados</span>
+                        </div>
+                        <div class="bulk-buttons-group">
+                            <button id="btnBulkExcel" class="btn-bulk btn-bulk-excel" title="Exportar locais para planilha Excel">
+                                📊 Exportar para Excel
+                            </button>
+                            <button id="btnBulkCRM" class="btn-bulk btn-bulk-crm" title="Enviar locais selecionados para o CRM">
+                                🚀 Enviar para CRM
+                            </button>
+                            <button id="btnBulkTags" class="btn-bulk btn-bulk-tags" title="Atribuir ou remover tags dos locais">
+                                🏷️ Aplicar Tags
+                            </button>
+                            <button id="btnManageTags" class="btn-secondary btn-small" title="Gerenciar tags da empresa" style="margin: 0;">
+                                ⚙️ Tags
+                            </button>
+                        </div>
+                    </div>
+
                     <div id="placesGrid" class="places-grid">
                         <!-- Os cards serão injetados aqui -->
                     </div>
@@ -383,9 +448,9 @@
         </div>
     </div>
 
-    <!-- Modal de Novo / Editar Cliente (Empresa) -->
+    <!-- Modal de Novo / Editar Cliente (Empresa) com CRM e Permissões -->
     <div id="companyModal" class="modal">
-        <div class="modal-content" style="max-width: 450px;">
+        <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
                 <h3 id="companyModalTitle">Novo Cliente (Empresa)</h3>
                 <span class="close-modal" id="closeCompanyModal">&times;</span>
@@ -393,16 +458,115 @@
             <div class="modal-body">
                 <form id="formCompany">
                     <input type="hidden" id="companyId">
+                    
                     <div class="form-group">
                         <label for="companyName">Nome da Empresa / Cliente</label>
-                        <input type="text" id="companyName" placeholder="Ex: Nova Empresa Ltda" required>
+                        <input type="text" id="companyName" placeholder="Ex: SEO Company" required>
                     </div>
+
+                    <div class="form-section-title" style="margin-top: 1.25rem; font-weight: 700; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">
+                        Permissões e Recursos
+                    </div>
+                    
+                    <div class="form-group" style="flex-direction: row; align-items: center; gap: 10px; margin-top: 0.75rem;">
+                        <input type="checkbox" id="companyAllowExcel" checked style="width: auto; margin: 0;">
+                        <label for="companyAllowExcel" style="margin: 0; font-weight: normal; cursor: pointer;">Permitir exportação de dados para Excel (.xlsx)</label>
+                    </div>
+
+                    <div class="form-section-title" style="margin-top: 1.25rem; font-weight: 700; border-bottom: 1px solid var(--border-color); padding-bottom: 0.4rem;">
+                        Integração com CRM
+                    </div>
+
+                    <div class="form-group" style="flex-direction: row; align-items: center; gap: 10px; margin-top: 0.75rem;">
+                        <input type="checkbox" id="companyCrmEnabled" style="width: auto; margin: 0;">
+                        <label for="companyCrmEnabled" style="margin: 0; font-weight: normal; cursor: pointer;">Ativar integração com CRM para esta empresa</label>
+                    </div>
+
+                    <div id="crmConfigFields" class="hidden" style="background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 0.75rem;">
+                        <div class="form-group">
+                            <label for="companyCrmProvider">Provedor do CRM</label>
+                            <select id="companyCrmProvider">
+                                <option value="mz_partners" selected>CRM MZ Partners</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="companyCrmClientToken">Token do Cliente (client-token)</label>
+                            <input type="text" id="companyCrmClientToken" placeholder="Ex: token_uuid_gerado_no_crm">
+                        </div>
+                        <div class="form-group">
+                            <label for="companyCrmChannelId">ID do Canal / WhatsApp</label>
+                            <input type="text" id="companyCrmChannelId" placeholder="Ex: 554888283608">
+                        </div>
+                        <div class="form-group">
+                            <label for="companyCrmDepartmentUuid">UUID do Departamento</label>
+                            <input type="text" id="companyCrmDepartmentUuid" placeholder="Ex: d1234567-89ab-cdef...">
+                        </div>
+                        <div class="form-group">
+                            <label for="companyCrmAgentUuid">UUID do Agente Padrão</label>
+                            <input type="text" id="companyCrmAgentUuid" placeholder="Ex: a1234567-89ab-cdef...">
+                        </div>
+                        <div class="form-group">
+                            <label for="companyCrmTagUuid">UUID da Tag Padrão (Opcional)</label>
+                            <input type="text" id="companyCrmTagUuid" placeholder="Ex: t1234567-89ab-cdef...">
+                        </div>
+                    </div>
+
                     <div id="companyError" class="login-error hidden" style="margin-top: 1rem;"></div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button id="btnCompanyCancel" class="btn-secondary">Cancelar</button>
                 <button id="btnCompanySave" class="btn-primary">Salvar Cliente</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Gerenciador de Tags da Empresa -->
+    <div id="tagsModal" class="modal">
+        <div class="modal-content" style="max-width: 550px;">
+            <div class="modal-header">
+                <h3>🏷️ Gerenciar Tags da Empresa</h3>
+                <span class="close-modal" id="closeTagsModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 1.25rem; background: rgba(255,255,255,0.02); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <h4 style="margin-top: 0; margin-bottom: 0.75rem;">Criar Nova Tag</h4>
+                    <form id="formCreateTag" style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="text" id="newTagName" placeholder="Ex: Prioridade, Sem Site..." required style="flex: 1;">
+                        <input type="color" id="newTagColor" value="#3b82f6" style="width: 40px; height: 38px; border: none; cursor: pointer; background: transparent;" title="Cor da Tag">
+                        <button type="submit" class="btn-primary btn-small" style="width: auto; margin: 0;">Criar Tag</button>
+                    </form>
+                </div>
+
+                <h4>Tags Cadastradas</h4>
+                <div id="tagsListContainer" class="tags-manager-list" style="max-height: 250px; overflow-y: auto;">
+                    <!-- Tags injetadas via JS -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnCloseTagsModal" class="btn-secondary">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Aplicar Tags aos Locais Selecionados -->
+    <div id="applyTagsModal" class="modal">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h3>🏷️ Aplicar Tags nos Locais Selecionados</h3>
+                <span class="close-modal" id="closeApplyTagsModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="applyTagsSubtitle" style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1rem;">
+                    Selecione as tags que deseja adicionar aos locais.
+                </p>
+                <div id="applyTagsSelectContainer" class="apply-tags-checkbox-list">
+                    <!-- Checkboxes de tags injetados via JS -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnApplyTagsCancel" class="btn-secondary">Cancelar</button>
+                <button id="btnApplyTagsSubmit" class="btn-primary">Aplicar Tags</button>
             </div>
         </div>
     </div>
@@ -446,6 +610,8 @@
                         <thead>
                             <tr>
                                 <th>Nome do Cliente</th>
+                                <th>CRM</th>
+                                <th>Excel</th>
                                 <th>Data de Cadastro</th>
                                 <th>Ações</th>
                             </tr>
@@ -511,8 +677,8 @@
             <div class="modal-body">
                 <div style="font-size: 3rem; margin-bottom: 1rem;">🌍</div>
                 <p style="margin-bottom: 0.5rem; color: #a1a1aa;">Versão do Sistema</p>
-                <h2 style="margin: 0; color: #fff; font-size: 2rem;">v2.0.0 (Multi-Tenant)</h2>
-                <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #71717a;">Painel administrativo de SEO e gestão de locais com arquitetura de múltiplas empresas (Multi-Tenant), desenvolvido com NodeJS e MongoDB.</p>
+                <h2 style="margin: 0; color: #fff; font-size: 2rem;">v2.1.0 (Export & Tags)</h2>
+                <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #71717a;">Painel de SEO com gestão Multi-Tenant, exportação assíncrona para Excel, tags e integrações flexíveis com CRM.</p>
             </div>
         </div>
     </div>
@@ -538,8 +704,8 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/api.js?v=5"></script>
-    <script src="js/app.js?v=5"></script>
+    <script src="js/api.js?v=6"></script>
+    <script src="js/app.js?v=6"></script>
 </body>
 
 </html>

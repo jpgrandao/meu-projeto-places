@@ -20,9 +20,11 @@ const {
     deleteNeighborhood,
     addActivity,
     updateActivity,
-    deleteActivity
+    deleteActivity,
+    getLatestExportJob
 } = require('../database/mongodb');
 const { addToCRMQueue } = require('../crmQueue');
+const { startExcelExportJob, startCRMExportJob, checkCompanyCooldown } = require('../exportQueue');
 const searchEngine = require('../searchEngine');
 
 // --- PLACES ---
@@ -51,6 +53,45 @@ router.post('/places/update-status', async (req, res) => {
         }
         res.json(result);
     } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// --- EXPORTAÇÕES E AÇÕES EM LOTE ---
+
+// Disparar Exportação em lote para Excel
+router.post('/places/bulk-excel', async (req, res) => {
+    try {
+        const { filters, placeIds } = req.body;
+        const result = await startExcelExportJob(filters || {}, placeIds || [], req.company_id, req.app);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Disparar Envio em lote para o CRM
+router.post('/places/bulk-crm', async (req, res) => {
+    try {
+        const { filters, placeIds } = req.body;
+        const result = await startCRMExportJob(filters || {}, placeIds || [], req.company_id, req.app);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Verificar status da fila / cooldown de exportação
+router.get('/export-jobs/status', async (req, res) => {
+    try {
+        const cooldown = await checkCompanyCooldown(req.company_id);
+        const latestJob = await getLatestExportJob(req.company_id);
+        res.json({
+            success: true,
+            cooldown,
+            latestJob
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 // --- CITIES ---
@@ -122,7 +163,7 @@ router.post('/ai/generate-neighborhoods', async (req, res) => {
                     },
                     {
                         role: "user",
-                        content: `Retorne os principais bairros de: ${municipio} - ${estado}.`
+                        content: `Retorne a lista COMPLETA de todos os bairros pertencentes ao município: ${municipio} - ${estado}. Não limite a 10 bairros, liste todos os bairros conhecidos da cidade.`
                     }
                 ],
                 response_format: { type: "json_object" }
@@ -178,28 +219,37 @@ router.post('/engine/start', async (req, res) => {
     try {
         const config = req.body;
         const io = req.app.get('io');
-        const result = await searchEngine.start(config, io, req.company_id);
+        const result = searchEngine.start(config, io, req.company_id);
         res.json(result);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.post('/engine/pause', async (req, res) => {
-    try { res.json(await searchEngine.pause()); } catch (e) { res.status(500).json({ error: e.message }); }
+    try {
+        const result = searchEngine.pause();
+        res.json(result);
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.post('/engine/resume', async (req, res) => {
     try {
-        const io = req.app.get('io');
-        res.json(await searchEngine.resume(io));
+        const result = searchEngine.resume();
+        res.json(result);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.post('/engine/stop', async (req, res) => {
-    try { res.json(await searchEngine.stop()); } catch (e) { res.status(500).json({ error: e.message }); }
+    try {
+        const result = searchEngine.stop();
+        res.json(result);
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 router.get('/engine/status', async (req, res) => {
-    try { res.json(await searchEngine.getStatus()); } catch (e) { res.status(500).json({ error: e.message }); }
+    try {
+        const status = searchEngine.getStatus();
+        res.json(status);
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;

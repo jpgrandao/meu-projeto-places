@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const dotenv = require('dotenv');
 const { initMultiTenantAndSuperUser } = require('./database/mongodb');
+const { cleanOldExportFiles } = require('./excelExporter');
 
 // Load env vars
 dotenv.config();
@@ -19,6 +20,7 @@ app.use(express.json());
 
 // Servir arquivos estáticos do frontend
 app.use(express.static(path.join(__dirname, '../frontend')));
+app.use('/downloads', express.static(path.join(__dirname, '../frontend/downloads')));
 
 // Disponibilizar io no app para poder usar em rotas
 app.set('io', io);
@@ -27,11 +29,13 @@ app.set('io', io);
 const authRoutes = require('./routes/auth');
 const usersRoutes = require('./routes/users');
 const companiesRoutes = require('./routes/companies');
+const tagsRoutes = require('./routes/tags');
 const apiRoutes = require('./routes/api');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/companies', companiesRoutes);
+app.use('/api/tags', tagsRoutes);
 app.use('/api', apiRoutes);
 
 // Socket.io eventos
@@ -48,4 +52,8 @@ server.listen(PORT, async () => {
     
     // Inicializa multi-tenant e superusuário ao ligar o servidor
     await initMultiTenantAndSuperUser();
+
+    // Executa limpeza inicial e agenda rotina diária para apagar arquivos com +30 dias
+    cleanOldExportFiles();
+    setInterval(cleanOldExportFiles, 24 * 60 * 60 * 1000);
 });

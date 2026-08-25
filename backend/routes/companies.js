@@ -26,15 +26,39 @@ router.get('/', requireMaster, async (req, res) => {
     }
 });
 
+// Obter dados de uma empresa específica por ID (Master apenas ou própria empresa)
+router.get('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (!req.user.is_master && req.company_id !== id) {
+            return res.status(403).json({ error: 'Acesso negado.' });
+        }
+        const company = await getCompanyById(id);
+        if (!company) {
+            return res.status(404).json({ error: 'Empresa não encontrada.' });
+        }
+        res.json({ success: true, data: company });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Criar nova empresa (Master apenas)
 router.post('/', requireMaster, async (req, res) => {
     try {
-        const { name } = req.body;
+        const { name, allow_excel_export, crm_enabled, crm_provider, crm_config } = req.body;
         if (!name || !name.trim()) {
             return res.status(400).json({ error: 'O nome da empresa é obrigatório.' });
         }
 
-        const result = await createCompany(name, req.user.id);
+        const options = {
+            allow_excel_export: allow_excel_export !== undefined ? !!allow_excel_export : true,
+            crm_enabled: crm_enabled !== undefined ? !!crm_enabled : false,
+            crm_provider: crm_provider || 'mz_partners',
+            crm_config: crm_config || {}
+        };
+
+        const result = await createCompany(name, req.user.id, options);
         if (!result.success) {
             return res.status(400).json({ error: result.error });
         }
@@ -50,12 +74,16 @@ router.post('/', requireMaster, async (req, res) => {
 router.put('/:id', requireMaster, async (req, res) => {
     try {
         const { id } = req.params;
-        const { name } = req.body;
-        if (!name || !name.trim()) {
-            return res.status(400).json({ error: 'O nome da empresa é obrigatório.' });
-        }
+        const { name, allow_excel_export, crm_enabled, crm_provider, crm_config } = req.body;
 
-        const result = await updateCompany(id, { name });
+        const updates = {};
+        if (name !== undefined) updates.name = name;
+        if (allow_excel_export !== undefined) updates.allow_excel_export = allow_excel_export;
+        if (crm_enabled !== undefined) updates.crm_enabled = crm_enabled;
+        if (crm_provider !== undefined) updates.crm_provider = crm_provider;
+        if (crm_config !== undefined) updates.crm_config = crm_config;
+
+        const result = await updateCompany(id, updates);
         if (!result.success) {
             return res.status(400).json({ error: result.error });
         }

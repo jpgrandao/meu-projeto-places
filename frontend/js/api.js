@@ -68,15 +68,26 @@ window.api = {
 
     // --- Companies (Empresas / Clientes) ---
     getCompanies: () => window.api._get('/api/companies'),
-    createCompany: (name) => window.api._post('/api/companies', { name }),
-    updateCompany: (id, name) => window.api._put(`/api/companies/${id}`, { name }),
+    getCompany: (id) => window.api._get(`/api/companies/${id}`),
+    createCompany: (companyData) => typeof companyData === 'string' ? window.api._post('/api/companies', { name: companyData }) : window.api._post('/api/companies', companyData),
+    updateCompany: (id, companyData) => typeof companyData === 'string' ? window.api._put(`/api/companies/${id}`, { name: companyData }) : window.api._put(`/api/companies/${id}`, companyData),
     deleteCompany: (id) => window.api._delete(`/api/companies/${id}`),
     switchCompany: (companyId) => window.api._post('/api/companies/switch', { companyId }),
 
-    // --- Places ---
+    // --- Tags ---
+    getTags: () => window.api._get('/api/tags'),
+    createTag: (tag) => window.api._post('/api/tags', tag),
+    updateTag: (id, tag) => window.api._put(`/api/tags/${id}`, tag),
+    deleteTag: (id) => window.api._delete(`/api/tags/${id}`),
+    bulkApplyTags: (placeIds, tagIds, action = 'add') => window.api._post('/api/tags/bulk', { placeIds, tagIds, action }),
+
+    // --- Places & Bulk Export ---
     getPlaces: (filters) => window.api._post('/api/places', filters),
     updatePlace: (placeId) => window.api._post('/api/places/update', { placeId }),
     updateImportedStatus: (placeId, status) => window.api._post('/api/places/update-status', { placeId, status }),
+    bulkExportExcel: (filters, placeIds) => window.api._post('/api/places/bulk-excel', { filters, placeIds }),
+    bulkExportCRM: (filters, placeIds) => window.api._post('/api/places/bulk-crm', { filters, placeIds }),
+    getExportJobsStatus: () => window.api._get('/api/export-jobs/status'),
 
     // --- Cities ---
     getCities: () => window.api._get('/api/cities'),
@@ -115,5 +126,20 @@ window.api = {
     onEngineFinished: (callback) => {
         socket.on('engine-finished-notification', callback);
         return () => socket.off('engine-finished-notification', callback);
+    },
+    onExportProgress: (companyId, callback) => {
+        const event = `export-progress-${companyId}`;
+        socket.on(event, callback);
+        return () => socket.off(event, callback);
+    },
+    onExportFinished: (companyId, callback) => {
+        const event = `export-finished-${companyId}`;
+        socket.on(event, callback);
+        return () => socket.off(event, callback);
+    },
+    onExportError: (companyId, callback) => {
+        const event = `export-error-${companyId}`;
+        socket.on(event, callback);
+        return () => socket.off(event, callback);
     }
 };
