@@ -533,9 +533,32 @@ async function getExportJobs(companyId) {
         const cId = toObjectId(companyId);
         if (!cId) return [];
 
-        return await database.collection('export_jobs').find({ company_id: cId }).sort({ created_at: -1 }).limit(20).toArray();
+        return await database.collection('export_jobs').find({ company_id: cId }).sort({ created_at: -1 }).limit(50).toArray();
     } catch (error) {
         return [];
+    }
+}
+
+async function deleteExportJob(id, companyId) {
+    try {
+        const database = await getDb();
+        const cId = toObjectId(companyId);
+        const objId = toObjectId(id);
+        if (!cId || !objId) return { success: false, error: 'IDs inválidos.' };
+
+        const job = await database.collection('export_jobs').findOne({ _id: objId, company_id: cId });
+        if (job && job.file_path) {
+            const fs = require('fs');
+            const fullPath = path.join(__dirname, '../frontend/downloads', path.basename(job.file_path));
+            if (fs.existsSync(fullPath)) {
+                try { fs.unlinkSync(fullPath); } catch (e) {}
+            }
+        }
+
+        await database.collection('export_jobs').deleteOne({ _id: objId, company_id: cId });
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
     }
 }
 
@@ -1056,6 +1079,7 @@ module.exports = {
     updateExportJob,
     getLatestExportJob,
     getExportJobs,
+    deleteExportJob,
     initSuperUser,
     initMultiTenantAndSuperUser,
     getUserByEmail,

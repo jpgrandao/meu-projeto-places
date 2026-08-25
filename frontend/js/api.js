@@ -88,6 +88,8 @@ window.api = {
     bulkExportExcel: (filters, placeIds) => window.api._post('/api/places/bulk-excel', { filters, placeIds }),
     bulkExportCRM: (filters, placeIds) => window.api._post('/api/places/bulk-crm', { filters, placeIds }),
     getExportJobsStatus: () => window.api._get('/api/export-jobs/status'),
+    getExportJobs: () => window.api._get('/api/export-jobs'),
+    deleteExportJob: (id) => window.api._delete(`/api/export-jobs/${id}`),
 
     // --- Cities ---
     getCities: () => window.api._get('/api/cities'),

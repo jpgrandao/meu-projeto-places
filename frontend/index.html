@@ -44,6 +44,7 @@
                         </div>
                         <ul class="dropdown-list">
                             <li><button id="btnProfile">👤 Perfil</button></li>
+                            <li><button id="btnCompanyFiles">📁 Arquivos da Empresa</button></li>
                             <li id="liSwitchCompany" class="hidden"><button id="btnDropdownSwitchCompany">🔄 Trocar de Cliente</button></li>
                             <li id="liNewCompany" class="hidden"><button id="btnDropdownNewCompany">➕ Novo Cliente</button></li>
                             <li id="liAllCompanies" class="hidden"><button id="btnDropdownAllCompanies">🏢 Todos os Clientes</button></li>
@@ -679,6 +680,41 @@
                 <p style="margin-bottom: 0.5rem; color: #a1a1aa;">Versão do Sistema</p>
                 <h2 style="margin: 0; color: #fff; font-size: 2rem;">v2.1.0 (Export & Tags)</h2>
                 <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #71717a;">Painel de SEO com gestão Multi-Tenant, exportação assíncrona para Excel, tags e integrações flexíveis com CRM.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Arquivos, Status e Validade da Empresa -->
+    <div id="companyFilesModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>📁 Arquivos e Relatórios da Empresa</h3>
+                <span class="close-modal" id="closeCompanyFilesModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0; margin-bottom: 1rem;">
+                    Abaixo estão listados os relatórios e exportações geradas pela empresa, com seu status e prazo de validade (retenção de 30 dias no servidor).
+                </p>
+                <div class="table-wrapper" style="max-height: 380px; overflow-y: auto;">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Data de Geração</th>
+                                <th>Total Locais</th>
+                                <th>Status</th>
+                                <th>Validade / Expiração</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="companyFilesTableBody">
+                            <!-- Linhas injetadas via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btnCloseCompanyFilesModal" class="btn-secondary">Fechar</button>
             </div>
         </div>
     </div>

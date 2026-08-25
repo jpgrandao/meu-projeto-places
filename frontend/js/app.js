@@ -2057,6 +2057,120 @@ const formProfile = document.getElementById('formProfile');
 const profileError = document.getElementById('profileError');
 const profileSuccess = document.getElementById('profileSuccess');
 
+// --- MODAL DE ARQUIVOS, STATUS E VALIDADE DA EMPRESA ---
+const btnCompanyFiles = document.getElementById('btnCompanyFiles');
+const companyFilesModal = document.getElementById('companyFilesModal');
+const closeCompanyFilesModal = document.getElementById('closeCompanyFilesModal');
+const btnCloseCompanyFilesModal = document.getElementById('btnCloseCompanyFilesModal');
+const companyFilesTableBody = document.getElementById('companyFilesTableBody');
+
+function hideCompanyFilesModal() {
+    if (companyFilesModal) {
+        companyFilesModal.classList.remove('show');
+        setTimeout(() => { companyFilesModal.style.display = 'none'; }, 300);
+    }
+}
+
+async function openCompanyFilesModal() {
+    if (!companyFilesModal || !companyFilesTableBody) return;
+
+    if (userDropdown) userDropdown.classList.add('hidden');
+    companyFilesTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 1.5rem;">Carregando relatórios...</td></tr>';
+    companyFilesModal.style.display = 'flex';
+    setTimeout(() => { companyFilesModal.classList.add('show'); }, 10);
+
+    try {
+        const res = await window.api.getExportJobs();
+        const jobs = res.data || [];
+        companyFilesTableBody.innerHTML = '';
+
+        if (jobs.length === 0) {
+            companyFilesTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 1.5rem;">Nenhum arquivo ou relatório gerado até o momento.</td></tr>';
+            return;
+        }
+
+        const now = Date.now();
+        const RETENTION_DAYS = 30;
+
+        jobs.forEach(job => {
+            const dateStr = job.created_at ? new Date(job.created_at).toLocaleString('pt-BR') : 'N/A';
+            const typeLabel = job.type === 'excel' ? '📊 Excel (.xlsx)' : '🚀 Envio CRM';
+            const totalStr = `${job.processed_items || 0} / ${job.total_items || 0}`;
+
+            let statusBadge = '<span class="badge badge-inactive">Pendente</span>';
+            if (job.status === 'completed') {
+                statusBadge = '<span class="badge badge-active">Concluído</span>';
+            } else if (job.status === 'processing') {
+                statusBadge = '<span class="badge" style="background: #3b82f6; color: white;">Em Progresso...</span>';
+            } else if (job.status === 'failed') {
+                statusBadge = `<span class="badge" style="background: #ef4444; color: white;" title="${job.error_message || ''}">Falhou</span>`;
+            }
+
+            let validityBadge = '<span style="color: var(--text-secondary); font-size: 0.8rem;">-</span>';
+            let isDownloadable = false;
+
+            if (job.created_at) {
+                const createdAtMs = new Date(job.created_at).getTime();
+                const expiresAtMs = createdAtMs + (RETENTION_DAYS * 24 * 60 * 60 * 1000);
+                const daysRemaining = Math.ceil((expiresAtMs - now) / (1000 * 60 * 60 * 24));
+                const expDateStr = new Date(expiresAtMs).toLocaleDateString('pt-BR');
+
+                if (daysRemaining > 0) {
+                    isDownloadable = true;
+                    validityBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);" title="Válido até ${expDateStr}">
+                        Válido (${daysRemaining}d restantes)
+                    </span>`;
+                } else {
+                    validityBadge = `<span class="badge badge-inactive" title="Expirou em ${expDateStr}">Expirado (+30d)</span>`;
+                }
+            }
+
+            let downloadBtn = '';
+            if (job.type === 'excel' && job.file_url && isDownloadable && job.status === 'completed') {
+                downloadBtn = `<a href="${job.file_url}" target="_blank" class="btn-primary btn-small" style="text-decoration: none; padding: 0.3rem 0.68rem; font-size: 0.75rem; width: auto;">📥 Baixar</a>`;
+            }
+
+            const deleteBtn = `<button class="btn-icon btn-icon-delete btn-delete-export-job" data-id="${job._id}" title="Excluir Registro">
+                                <svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>
+                              </button>`;
+
+            const row = `
+                <tr>
+                    <td><strong>${typeLabel}</strong></td>
+                    <td style="font-size: 0.85rem;">${dateStr}</td>
+                    <td>${totalStr}</td>
+                    <td>${statusBadge}</td>
+                    <td>${validityBadge}</td>
+                    <td>${downloadBtn} ${deleteBtn}</td>
+                </tr>
+            `;
+            companyFilesTableBody.insertAdjacentHTML('beforeend', row);
+        });
+
+        companyFilesTableBody.querySelectorAll('.btn-delete-export-job').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-id');
+                if (confirm('Deseja excluir este registro de relatório?')) {
+                    const res = await window.api.deleteExportJob(id);
+                    if (res.success) {
+                        await openCompanyFilesModal();
+                    } else {
+                        alert('Erro ao excluir registro: ' + res.error);
+                    }
+                }
+            });
+        });
+
+    } catch (e) {
+        console.error(e);
+        companyFilesTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Erro ao carregar arquivos da empresa.</td></tr>';
+    }
+}
+
+if (btnCompanyFiles) btnCompanyFiles.addEventListener('click', openCompanyFilesModal);
+if (closeCompanyFilesModal) closeCompanyFilesModal.addEventListener('click', hideCompanyFilesModal);
+if (btnCloseCompanyFilesModal) btnCloseCompanyFilesModal.addEventListener('click', hideCompanyFilesModal);
+
 function hideProfileModal() {
     profileModal.classList.remove('show');
     setTimeout(() => { profileModal.style.display = 'none'; }, 300);

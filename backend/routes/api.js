@@ -21,7 +21,9 @@ const {
     addActivity,
     updateActivity,
     deleteActivity,
-    getLatestExportJob
+    getLatestExportJob,
+    getExportJobs,
+    deleteExportJob
 } = require('../database/mongodb');
 const { addToCRMQueue } = require('../crmQueue');
 const { startExcelExportJob, startCRMExportJob, checkCompanyCooldown } = require('../exportQueue');
@@ -89,6 +91,26 @@ router.get('/export-jobs/status', async (req, res) => {
             cooldown,
             latestJob
         });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Listar todos os arquivos/jobs de exportação da empresa
+router.get('/export-jobs', async (req, res) => {
+    try {
+        const jobs = await getExportJobs(req.company_id);
+        res.json({ success: true, data: jobs });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Excluir um arquivo/job de exportação
+router.delete('/export-jobs/:id', async (req, res) => {
+    try {
+        const result = await deleteExportJob(req.params.id, req.company_id);
+        res.json(result);
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
