@@ -427,6 +427,16 @@ function setupExportSocketListeners(companyId) {
     });
 }
 
+const btnCloseExportBanner = document.getElementById('btnCloseExportBanner');
+if (btnCloseExportBanner) {
+    btnCloseExportBanner.addEventListener('click', () => {
+        const exportProgressBanner = document.getElementById('exportProgressBanner');
+        if (exportProgressBanner) {
+            exportProgressBanner.classList.add('hidden');
+        }
+    });
+}
+
 // --- GESTÃO DE TAGS (MODAIS & OPERAÇÕES) ---
 
 const btnManageTags = document.getElementById('btnManageTags');
