@@ -10,6 +10,23 @@ let currentPage = 1;
 let totalResults = 0;
 let selectedPlaceIds = new Set();
 let cachedCompanyTags = [];
+let activeCompanyConfig = { crm_enabled: false, allow_excel_export: true };
+
+function updateCompanyFeaturesUI() {
+    const btnBulkCRM = document.getElementById('btnBulkCRM');
+    const filterCrmStatusGroup = document.getElementById('filterCrmStatusGroup');
+    const btnBulkExcel = document.getElementById('btnBulkExcel');
+    const filterExcelStatusGroup = document.getElementById('filterExcelStatusGroup');
+
+    const crmActive = !!activeCompanyConfig.crm_enabled;
+    const excelActive = activeCompanyConfig.allow_excel_export !== false;
+
+    if (btnBulkCRM) btnBulkCRM.classList.toggle('hidden', !crmActive);
+    if (filterCrmStatusGroup) filterCrmStatusGroup.classList.toggle('hidden', !crmActive);
+
+    if (btnBulkExcel) btnBulkExcel.classList.toggle('hidden', !excelActive);
+    if (filterExcelStatusGroup) filterExcelStatusGroup.classList.toggle('hidden', !excelActive);
+}
 
 // --- LOCAIS (PLACES) E FILTROS ---
 
@@ -86,6 +103,20 @@ async function loadPlaces(isNewSearch = false) {
             tagsHtml += '</div>';
         }
 
+        let crmBadgeHtml = '';
+        if (activeCompanyConfig.crm_enabled) {
+            crmBadgeHtml = `<span class="badge-status-pill ${isCrmExported ? 'badge-status-active' : 'badge-status-inactive'}" title="${isCrmExported ? 'Enviado para o CRM' : 'Não enviado ao CRM'}">
+                ${isCrmExported ? '🟢 CRM' : '⚪ CRM'}
+            </span>`;
+        }
+
+        let excelBadgeHtml = '';
+        if (activeCompanyConfig.allow_excel_export !== false) {
+            excelBadgeHtml = `<span class="badge-status-pill ${isExcelExported ? 'badge-status-active' : 'badge-status-inactive'}" title="${isExcelExported ? 'Exportado para Excel' : 'Não exportado para Excel'}">
+                ${isExcelExported ? '🟢 Excel' : '⚪ Excel'}
+            </span>`;
+        }
+
         const card = `
             <div class="place-card" data-place-id="${place.place_id}">
                 <div class="place-card-top-row">
@@ -125,12 +156,8 @@ async function loadPlaces(isNewSearch = false) {
                 <div class="card-footer">
                     <span class="status-badge ${statusClass}">${formattedStatus}</span>
                     <div style="display: flex; gap: 0.4rem; align-items: center;">
-                        <span class="badge-status-pill ${isCrmExported ? 'badge-status-active' : 'badge-status-inactive'}" title="${isCrmExported ? 'Enviado para o CRM' : 'Não enviado ao CRM'}">
-                            ${isCrmExported ? '🟢 CRM' : '⚪ CRM'}
-                        </span>
-                        <span class="badge-status-pill ${isExcelExported ? 'badge-status-active' : 'badge-status-inactive'}" title="${isExcelExported ? 'Exportado para Excel' : 'Não exportado para Excel'}">
-                            ${isExcelExported ? '🟢 Excel' : '⚪ Excel'}
-                        </span>
+                        ${crmBadgeHtml}
+                        ${excelBadgeHtml}
                     </div>
                     <button class="btn-update" data-place-id="${place.place_id}" title="Atualizar dados do Google Maps" style="margin-left: auto; margin-right: 0;">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-refresh"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.92-10.44l5.58 5.58"/></svg>
@@ -1541,6 +1568,11 @@ async function init() {
             headerCompanyName.textContent = user.company_name || 'SEO Company';
         }
 
+        // Configuração de recursos ativados para a empresa ativa (CRM, Excel)
+        activeCompanyConfig.crm_enabled = !!user.crm_enabled;
+        activeCompanyConfig.allow_excel_export = user.allow_excel_export !== false;
+        updateCompanyFeaturesUI();
+
         // Configura Socket.io para exportações da empresa
         if (user.current_company_id) {
             setupExportSocketListeners(user.current_company_id);
@@ -1709,6 +1741,12 @@ function renderSwitchCompanyList(companies) {
                     
                     const headerCompanyName = document.getElementById('headerCompanyName');
                     if (headerCompanyName) headerCompanyName.textContent = companyName;
+
+                    if (res.activeCompany) {
+                        activeCompanyConfig.crm_enabled = !!res.activeCompany.crm_enabled;
+                        activeCompanyConfig.allow_excel_export = res.activeCompany.allow_excel_export !== false;
+                        updateCompanyFeaturesUI();
+                    }
 
                     hideSwitchCompanyModal();
                     reloadCurrentTab();
@@ -1939,6 +1977,11 @@ async function loadCompaniesAdminTable() {
                     if (res.token) localStorage.setItem('token', res.token);
                     localStorage.setItem('current_company_id', id);
                     document.getElementById('headerCompanyName').textContent = name;
+                    if (res.activeCompany) {
+                        activeCompanyConfig.crm_enabled = !!res.activeCompany.crm_enabled;
+                        activeCompanyConfig.allow_excel_export = res.activeCompany.allow_excel_export !== false;
+                        updateCompanyFeaturesUI();
+                    }
                     await loadCompaniesAdminTable();
                     reloadCurrentTab();
                 } else {

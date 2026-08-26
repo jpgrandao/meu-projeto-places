@@ -27,11 +27,17 @@ router.post('/login', async (req, res) => {
         const companyId = user.company_id ? user.company_id.toString() : null;
         const currentCompanyId = (user.current_company_id || user.company_id) ? (user.current_company_id || user.company_id).toString() : null;
 
-        // Buscar nome da empresa ativa
+        // Buscar dados da empresa ativa
         let companyName = 'N/A';
+        let crmEnabled = false;
+        let allowExcelExport = true;
         if (currentCompanyId) {
             const comp = await getCompanyById(currentCompanyId);
-            if (comp) companyName = comp.name;
+            if (comp) {
+                companyName = comp.name;
+                crmEnabled = !!comp.crm_enabled;
+                allowExcelExport = comp.allow_excel_export !== false;
+            }
         }
 
         let companiesList = [];
@@ -63,7 +69,9 @@ router.post('/login', async (req, res) => {
                 is_master: isMaster,
                 company_id: companyId,
                 current_company_id: currentCompanyId,
-                company_name: companyName
+                company_name: companyName,
+                crm_enabled: crmEnabled,
+                allow_excel_export: allowExcelExport
             },
             companies: companiesList
         });
@@ -88,9 +96,15 @@ router.get('/me', verifyToken, async (req, res) => {
         const activeCompanyId = isMaster && req.company_id ? req.company_id : ((user.current_company_id || user.company_id) ? (user.current_company_id || user.company_id).toString() : null);
 
         let companyName = 'N/A';
+        let crmEnabled = false;
+        let allowExcelExport = true;
         if (activeCompanyId) {
             const comp = await getCompanyById(activeCompanyId);
-            if (comp) companyName = comp.name;
+            if (comp) {
+                companyName = comp.name;
+                crmEnabled = !!comp.crm_enabled;
+                allowExcelExport = comp.allow_excel_export !== false;
+            }
         }
 
         let companiesList = [];
@@ -108,7 +122,9 @@ router.get('/me', verifyToken, async (req, res) => {
                 is_master: isMaster,
                 company_id: companyId,
                 current_company_id: activeCompanyId,
-                company_name: companyName
+                company_name: companyName,
+                crm_enabled: crmEnabled,
+                allow_excel_export: allowExcelExport
             },
             companies: companiesList
         });

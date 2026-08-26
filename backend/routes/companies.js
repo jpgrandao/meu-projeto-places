@@ -163,7 +163,9 @@ router.post('/switch', requireMaster, async (req, res) => {
             token,
             activeCompany: {
                 id: company._id,
-                name: company.name
+                name: company.name,
+                crm_enabled: !!company.crm_enabled,
+                allow_excel_export: company.allow_excel_export !== false
             },
             message: `Empresa ativa alterada para "${company.name}"`
         });
